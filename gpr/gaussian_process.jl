@@ -1,7 +1,8 @@
 """
 Adapted from sandreza/Learning/sandbox/gaussian_process.jl
 https://github.com/sandreza/Learning/blob/master/sandbox/gaussian_process.jl
-Changed handling of kernel functions; changed some variable names
+Changed handling of kernel functions; changed some variable names;
+added log marginal likelihood function.
 """
 
 using LinearAlgebra
@@ -94,8 +95,8 @@ prediction(x, 𝒢::GP)
 - 'y': prediction
 """
 function prediction(x, 𝒢::GP)
-    println("𝒢.data $(𝒢.data)") #x_train
-    println("x $(x)") #x
+    # println("𝒢.data $(𝒢.data)") #x_train
+    # println("x $(x)") #x
     y =  𝒢.α' * 𝒢.kernel.(x, 𝒢.data)
     return y
 end

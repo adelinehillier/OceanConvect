@@ -4,60 +4,6 @@ Adapted from sandreza/Learning/sandbox/oceananigans_converter.jl
 https://github.com/sandreza/Learning/blob/master/sandbox/oceananigans_converter.jl
 """
 
-# functions and structs to Hook Oceananigans to OceanTurb
-# also lets us define loss functions
-# OceananigansToOceanTurb is what the o2o stands for
-using JLD2
-
-struct OceananigansData{𝒮, 𝒯, 𝒰, 𝒱}
-    # initial conditions, 4
-    T⁰::𝒮
-    S⁰::𝒮
-    U⁰::𝒮
-    V⁰::𝒮
-
-    # fields at each moment in time, 4
-    T::𝒯
-    S::𝒯
-    U::𝒯
-    V::𝒯
-
-    # some second order statistics at each moment in time, 5
-    wT::𝒯
-    wS::𝒯
-    uu::𝒯
-    vv::𝒯
-    ww::𝒯
-
-    # simulation constants, 8
-    ρ::𝒰
-    α::𝒰
-    β::𝒰
-    cᵖ::𝒰
-    f⁰::𝒰
-    g::𝒰
-    L::𝒰
-
-    # time and grid, 2
-    t::𝒮
-    z::𝒮
-
-    #top boundary condition data, see string for type of boundary condition, 4
-    top_T::𝒰
-    top_S::𝒰
-    top_U::𝒰
-    top_V::𝒰
-
-    #bottom boundary condition data, see string for type of boundary condtion,4
-    bottom_T::𝒰
-    bottom_S::𝒰
-    bottom_U::𝒰
-    bottom_V::𝒰
-
-    #info about the simulation, 1
-    info::𝒱
-end
-
 """
 OceananigansData(filename)
 # Description
