@@ -1,19 +1,26 @@
 """
-Create constructors for covariance functions.
+Constructors for covariance functions.
 
       Constructor                   Description                                Isotropic/Anisotropic
     - SquaredExponentialI(γ,σ):     squared exponential covariance function    isotropic
-    - SquaredExponentialA(γ,σ):     squared exponential covariance function    anisotropic
+  # - SquaredExponentialA(γ,σ):     squared exponential covariance function    anisotropic
     - ExponentialI(γ,σ):            exponential covariance function            isotropic
-    - ExponentialA(γ,σ):            exponential covariance function            anisotropic
+  # - ExponentialA(γ,σ):            exponential covariance function            anisotropic
     - RationalQuadraticI():         rational quadratic covariance function     isotropic
-    - RationalQuadraticA():         rational quadratic covariance function     anisotropic
+  # - RationalQuadraticA():         rational quadratic covariance function     anisotropic
     - Matern12I():                  Matérn covariance function with ʋ = 1/2.   isotropic
-    - Matern12A():                  Matérn covariance function with ʋ = 1/2.   anisotropic
+  # - Matern12A():                  Matérn covariance function with ʋ = 1/2.   anisotropic
     - Matern32I():                  Matérn covariance function with ʋ = 3/2.   isotropic
-    - Matern32A():                  Matérn covariance function with ʋ = 3/2.   anisotropic
+  # - Matern32A():                  Matérn covariance function with ʋ = 3/2.   anisotropic
     - Matern52I():                  Matérn covariance function with ʋ = 5/2.   isotropic
-    - Matern52A():                  Matérn covariance function with ʋ = 5/2.   anisotropic
+  # - Matern52A():                  Matérn covariance function with ʋ = 5/2.   anisotropic
+
+Distance metrics
+
+    - l²-norm:  d(x,x') = || x - x' ||",
+    - H¹-norm:  d(x,x') = || diff(x)./diff(z) - diff(x')./diff(z) ||",
+    - H⁻¹-norm: d(x,x') = || diff(x).*diff(z) - diff(x').*diff(z) ||"
+
 """
 abstract type Kernel end
 
@@ -24,7 +31,22 @@ abstract type Kernel end
 """ SquaredExponentialI(γ,σ): squared exponential covariance function, isotropic """
 struct SquaredExponentialKernelI{T<:Float64} <: Kernel
     # Hyperparameters
-    "Squared length scale"
+    "Length scale"
+    γ::T
+    "Signal variance"
+    σ::T
+end
+
+# evaluates the kernel function for a given pair of inputs
+function kernel_function(k::SquaredExponentialKernelI; d=l2_norm, z=nothing)
+    # k(x,x') = σ * exp( - d(x,x')² / 2γ² )
+  evaluate(a,b) = k.σ * exp(- d(a,b,z)^2 / 2*(k.γ)^2 )
+  return evaluate
+end
+
+struct FakeKernelI{T<:Float64} <: Kernel
+    # Hyperparameters
+    "Length scale"
     γ::T
     "Signal variance"
     σ::T
@@ -32,30 +54,14 @@ struct SquaredExponentialKernelI{T<:Float64} <: Kernel
     # evaluate(a,b; γ,σ) = σ * exp(- sq_mag(a,b) / 2*γ )
 end
 
-function kernel_function(k::SquaredExponentialKernelI)
-  evaluate(a,b) = k.σ * exp(- sq_mag(a,b) / k.γ )
-  return evaluate
-end
-
-""" ExponentialI(γ,σ): exponential covariance function, isotropic """
-struct ExponentialKernelI{T<:Float64} <: Kernel
-    # Hyperparameters
-    "Squared length scale"
-    γ::T
-    "Signal variance"
-    σ::T
-    # equation = "k(a,b) = σ * exp( - ||a-b|| / 2*γ )"
-    # evaluate(a,b; γ,σ) = σ * exp(- mag(a,b) / 2*γ )
-end
-
-function kernel_function(k::ExponentialKernelI)
-  evaluate(a,b) = k.σ * exp(- sqrt(sq_mag(a,b)) / k.γ )
+function kernel_function(k::FakeKernelI; d=l2_norm, z=nothing)
+  evaluate(a,b,z) = 1.0
   return evaluate
 end
 
 struct RationalQuadraticI{T<:Float64} <: Kernel
     # Hyperparameters
-    "Squared length scale"
+    "Length scale"
     γ::T
     "Signal variance"
     σ::T
@@ -63,9 +69,11 @@ struct RationalQuadraticI{T<:Float64} <: Kernel
     α::T
 end
 
-function kernel_function(k::RationalQuadraticI)
+function kernel_function(k::RationalQuadraticI; d=l2_norm, z=nothing)
+    # k(x,x') = σ * (1+(x-x')'*(x-x')/(2*α*(γ²))^(-α)
     function evaluate(a,b)
-     return k.σ * (1+(a-b)'*(a-b)/(2*k.α*k.γ))^(-k.α)
+        l = (k.γ)^2 # squared length scale
+     return k.σ * (1+(a-b)'*(a-b)/(2*k.α*l))^(-k.α)
  end
   return evaluate
 end
@@ -73,27 +81,29 @@ end
 struct Matern12I{T<:Float64} <: Kernel
     # Hyperparameters
     "Length scale"
-    l::T
+    γ::T
     "Signal variance"
     σ::T
 end
 
-function kernel_function(k::Matern12I)
-  evaluate(a,b) = k.σ * exp(- sqrt(sq_mag(a,b)) / k.l )
+function kernel_function(k::Matern12I; d=l2_norm, z=nothing)
+    # k(x,x') = σ * exp( - ||x-x'|| / γ )
+  evaluate(a,b) = k.σ * exp(- d(a,b,z) / k.γ )
   return evaluate
 end
 
 struct Matern32I{T<:Float64} <: Kernel
     # Hyperparameters
     "Length scale"
-    l::T
+    γ::T
     "Signal variance"
     σ::T
 end
 
-function kernel_function(k::Matern32I)
+function kernel_function(k::Matern32I; d=l2_norm, z=nothing)
+    # k(x,x') = σ * (1+c) * exp(-√(3)*||x-x'||)/γ)
     function evaluate(a,b)
-        c = sqrt(3*sq_mag(a,b))/k.l
+        c = sqrt(3)*d(a,b,z)/k.γ
         return k.σ * (1+c) * exp(-c)
     end
   return evaluate
@@ -102,115 +112,158 @@ end
 struct Matern52I{T<:Float64} <: Kernel
     # Hyperparameters
     "Length scale"
-    l::T
+    γ::T
     "Signal variance"
     σ::T
 end
 
-function kernel_function(k::Matern52I)
+function kernel_function(k::Matern52I; d=l2_norm, z=nothing)
+    # k(x,x') = σ * ( 1 + √(5)*||x-x'||)/γ + 5*||x-x'||²/(3*γ^2) ) * exp(-√(5)*||x-x'||)/γ)
     function evaluate(a,b)
-        c = sqrt(5*sq_mag(a,b))/k.l
-        d = 5*sq_mag(a,b)/(3*k.l^2)
-        return k.σ * (1+c+d) * exp(-c)
+        g = sqrt(5)*d(a,b,z)/k.γ
+        h = 5*(d(a,b,z)^2)/(3*k.γ^2)
+        return k.σ * (1+g+h) * exp(-g)
     end
   return evaluate
 end
 
-#  *--*--*--*--*--*--*--*--*--*--*--*--*
-#  | Anisotropic covariance functions  |
-#  *--*--*--*--*--*--*--*--*--*--*--*--*
+#  *--*--*--*--*--*--*--*
+#  | Distance functions |
+#  *--*--*--*--*--*--*--*
 
-# function Matern(ν::Real, ll::Real, lσ::Real)
-#     if ν==1/2
-#         kern = Mat12Iso(ll, lσ)
-#     elseif ν==3/2
-#         kern = Mat32Iso(ll, lσ)
-#     elseif ν==5/2
-#         kern = Mat52Iso(ll, lσ)
-#     else throw(ArgumentError("Only Matern 1/2, 3/2 and 5/2 are implementable"))
+δ(Φ, z) = diff(Φ) ./ diff(z)
+
+# this is norm(a-b)^2 but more efficient
+function sq_mag(a,b) # ||a - b||^2
+    ll = 0.0
+    indices = 1:length(a)
+    @inbounds for k in indices
+        ll += (a[k]-b[k])^2
+    end
+    return ll
+end
+
+"""
+l2_norm: computes the Euclidean distance (l²-norm) between two vectors
+"""
+function l2_norm(a,b,z) # d(x,x') = || x - x' ||
+    return sqrt(sq_mag(a,b))
+end
+
+function l2_norm(a,b) # d(x,x') = || x - x' ||
+    return sqrt(sq_mag(a,b))
+end
+
+"""
+h1_norm: computes the H¹-norm w.r.t z of two vectors
+"""
+function h1_norm(a,b,z) # d(x,x') = || diff(x)./diff(z) - diff(x')./diff(z) ||
+    return l2_norm( δ(a, z), δ(b, z) )
+end
+
+"""
+hm1_norm: computes the H⁻¹-norm w.r.t z of two vectors
+"""
+function hm1_norm(a,b,z) # || diff(x).*diff(z) - diff(x').*diff(z) ||
+    return l2_norm(diff(a).*diff(z) , diff(b).*diff(z))
+end
+
+
+
+# """ SquaredExponentialI(γ,σ): squared exponential covariance function, isotropic """
+# struct SquaredExponentialKernelI{T<:Float64} <: Kernel
+#     # Hyperparameters
+#     "Length scale"
+#     γ::T
+#     "Signal variance"
+#     σ::T
+# end
+#
+# function kernel_function(k::SquaredExponentialKernelI)
+#     # k(x,x') = σ * exp( - ||x-x'||² / 2γ² )
+#   evaluate(a,b) = k.σ * exp(- sq_mag(a,b) / 2*(k.γ)^2 )
+#   return evaluate
+# end
+#
+# struct FakeKernelI{T<:Float64} <: Kernel
+#     # Hyperparameters
+#     "Length scale"
+#     γ::T
+#     "Signal variance"
+#     σ::T
+#     # equation = "k(a,b) = σ * exp( - ||a-b||^2 / 2*γ )"
+#     # evaluate(a,b; γ,σ) = σ * exp(- sq_mag(a,b) / 2*γ )
+# end
+#
+# function kernel_function(k::FakeKernelI)
+#   evaluate(a,b) = 1.0
+#   return evaluate
+# end
+#
+# struct RationalQuadraticI{T<:Float64} <: Kernel
+#     # Hyperparameters
+#     "Length scale"
+#     γ::T
+#     "Signal variance"
+#     σ::T
+#     "Shape parameter"
+#     α::T
+# end
+#
+# function kernel_function(k::RationalQuadraticI)
+#     # k(x,x') = σ * (1+(x-x')'*(x-x')/(2*α*(γ²))^(-α)
+#     function evaluate(a,b)
+#         l = (k.γ)^2 # squared length scale
+#      return k.σ * (1+(a-b)'*(a-b)/(2*k.α*l))^(-k.α)
+#  end
+#   return evaluate
+# end
+#
+# struct Matern12I{T<:Float64} <: Kernel
+#     # Hyperparameters
+#     "Length scale"
+#     γ::T
+#     "Signal variance"
+#     σ::T
+# end
+#
+# function kernel_function(k::Matern12I)
+#     # k(x,x') = σ * exp( - ||x-x'|| / γ )
+#   evaluate(a,b) = k.σ * exp(- mag(a,b) / k.γ )
+#   return evaluate
+# end
+#
+# struct Matern32I{T<:Float64} <: Kernel
+#     # Hyperparameters
+#     "Length scale"
+#     γ::T
+#     "Signal variance"
+#     σ::T
+# end
+#
+# function kernel_function(k::Matern32I)
+#     # k(x,x') = σ * (1+c) * exp(-√(3)*||x-x'||)/γ)
+#     function evaluate(a,b)
+#         c = sqrt(3)*mag(a,b)/k.γ
+#         return k.σ * (1+c) * exp(-c)
 #     end
-#     return kern
+#   return evaluate
 # end
-
-# anisotropic_kernel_options = Dict("squared_exponential" => squared_exponential_kernel,
-#                       "exponential" => exponential_kernel,
-#                     #   "rational_quadratic" => rational_quadratic_kernel,
-#                     #   "matern12" => matern_kernel(0.5),
-#                     #   "matern32" => matern_kernel(1.5),
-#                     #   "matern52" => matern_kernel(2.5),
-#                   )
-
-# function kernel_function(kernel_name, hyperparameters)
-#     k(a,b) = kernel_options[kernel_name](hyperparameters)
-#     return k
+#
+# struct Matern52I{T<:Float64} <: Kernel
+#     # Hyperparameters
+#     "Length scale"
+#     γ::T
+#     "Signal variance"
+#     σ::T
 # end
-
-# function set_params!(se::Kernel, hyp::AbstractVector)
-#     length(hyp) == 2
-#     se.ℓ2, se.σ2 = exp(2 * hyp[1]), exp(2 * hyp[2])
-# end
-
-# """
-# squared_exponential_kernel(x,y; hyperparameters=[1.0, 1.0])
-# # Description
-# - Outputs a squared exponential kernel with hyperparameters γ, σ
-# # Arguments
-# - a: first coordinate
-# - b: second coordinate
-# # Keyword Arguments
-# - hyperparameters (vector). = [γ σ]
-#   The first is γ, the second is σ where k(a,b) = σ * exp( - ||a-b||^2 / 2*γ )
-#     - γ = 1.0: (scalar). squared length-scale
-#     - σ = 1.0; (scalar). signal variance
-# """
-# function squared_exponential_kernel(a,b; hyperparameters=[1.0, 1.0])
-#     return hyperparameters[1] * exp(- sq_mag(a,b) / 2*hyperparameters[2] )
-# end
-
-# """
-# exponential_kernel(x,y; hyperparameters=[1.0, 1.0])
-# # Description
-# - Outputs a squared exponential kernel with hyperparameters γ, σ
-# # Arguments
-# - a: first coordinate
-# - b: second coordinate
-# # Keyword Arguments
-# - hyperparameters (vector). = [γ σ]
-#   The first is γ, the second is σ where, k(x,y) = σ * exp( - ||a-b|| / 2*γ )
-#     - γ = 1.0: (scalar). length-scale
-#     - σ = 1.0; (scalar). signal variance
-# """
-# function exponential_kernel(a,b; hyperparameters=[1.0, 1.0])
-#     return hyperparameters[1] * exp(- sqrt(sq_mag(a,b)) / 2*hyperparameters[2] )
-# end
-
-# """
-# closure_gaussian_kernel(x,y; γ = 1.0, σ = 1.0)
-# # Description
-# - Outputs a function that computes a Gaussian kernel
-# # Arguments
-# - d: distance function. d(x,y)
-# # Keyword Arguments
-# -The first is γ, the second is σ where, k(x,y) = σ * exp(- γ * d(x,y))
-# - γ = 1.0: (scalar). hyperparameter in the Gaussian Kernel.
-# - σ = 1.0; (scalar). hyperparameter in the Gaussian Kernel.
-# """
-# function closure_guassian_closure(d; hyperparameters = [1.0, 1.0])
-#     function gaussian_kernel(x,y)
-#         y = hyperparameters[2] * exp(- hyperparameters[1] * d(x,y))
-#         return y
+#
+# function kernel_function(k::Matern52I)
+#     # k(x,x') = σ * ( 1 + √(5)*||x-x'||)/γ + 5*||x-x'||²/(3*γ^2) ) * exp(-√(5)*||x-x'||)/γ)
+#     function evaluate(a,b)
+#         c = sqrt(5)*mag(a,b)/k.γ
+#         d = 5*sq_mag(a,b)/(3*k.γ^2)
+#         return k.σ * (1+c+d) * exp(-c)
 #     end
-#     return gaussian_kernel
-# end
-
-# function Matern(ν::Real, ll::Real, lσ::Real)
-#     if ν==1/2
-#         kern = Mat12Iso(ll, lσ)
-#     elseif ν==3/2
-#         kern = Mat32Iso(ll, lσ)
-#     elseif ν==5/2
-#         kern = Mat52Iso(ll, lσ)
-#     else throw(ArgumentError("Only Matern 1/2, 3/2 and 5/2 are implementable"))
-#     end
-#     return kern
+#   return evaluate
 # end
