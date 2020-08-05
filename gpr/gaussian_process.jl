@@ -17,10 +17,13 @@ GP
 - data structure for typical GPR computations
 # Data Structure and Description
     kernel::ℱ, a function
-    data::𝒮 , an array of vectors
+    data::𝒮 , an array of vectors (n-length array of D-length vectors)
     α::𝒮2 , an array
     K::𝒰 , matrix or sparse matrix
     CK::𝒱, cholesky factorization of K
+    nc::Number, normalization constant (scales the data during preprocessing. The scaling is reversed during postprocessing.)
+    d:Function, distance function to use in the kernel
+    z::Vector, values w.r.t. which to derivate the state when evaluating the distance function
 """
 struct GP{ℱ, 𝒮, 𝒮2, 𝒰, 𝒱}
     kernel::ℱ
@@ -28,6 +31,7 @@ struct GP{ℱ, 𝒮, 𝒮2, 𝒰, 𝒱}
     α::𝒮2
     K::𝒰
     CK::𝒱
+    nc::Number
 end
 
 """
@@ -36,12 +40,15 @@ construct_gpr(x_train, y_train; kernel; sparsity_threshold = 0.0, robust = true,
 Constructs the posterior distribution for a GP. In other words this does the 'training' automagically.
 # Arguments
 - 'x_train': (array). training inputs (predictors), must be an array of states.
-                     array is D x n, where D is the length of each input n is the number of training points
+                      length-n array of D-length vectors, where D is the length of each input n is the number of training points.
 - 'y_train': (array). training outputs (prediction), must have the same number as x_train
-                     array is 1 x n
-- 'kernel': (Kernel). Kernel object. See kernels.jl for options.
+                      length-n array of D-length vectors.
+- 'kernel': (Kernel). Kernel object. See kernels.jl.
                       kernel_function(kernel)(x,x') maps predictor x predictor to real numbers.
 # Keyword Arguments
+- 'distance_fn': (function). distance function to use in the kernel (default Euclidean distance)
+- 'z': (vector). values w.r.t. which to derivate the state (default none).
+- 'normalize': (bool). whether to normalize the data during preprocessing and reverse the scaling for postprocessing. Can lead to better performance.
 - 'hyperparameters': (array). default = []. hyperparameters that enter into the kernel
 - 'sparsity_threshold': (number). default = 0.0. a number between 0 and 1 that determines when to use sparse array format. The default is to never use it
 - 'robust': (bool). default = true. This decides whether to uniformly scale the diagonal entries of the Kernel Matrix. This sometimes helps with Cholesky factorizations.
@@ -49,11 +56,18 @@ Constructs the posterior distribution for a GP. In other words this does the 'tr
 # Return
 - 'GP Object': (GP).
 """
-function construct_gpr(x_train, y_train, kernel::Kernel; sparsity_threshold = 0.0, robust = true, entry_threshold = sqrt(eps(1.0)))
+function construct_gpr(x_train, y_train, kernel::Kernel; distance_fn=l2_norm, z=nothing, normalize=true, sparsity_threshold = 0.0, robust = true, entry_threshold = sqrt(eps(1.0)))
+
+    # preprocessing
+    nc = 1.0 # normalization constant
+    if normalize
+        nc = maximum(maximum, x_train)
+        x_train = x_train ./ nc
+        y_train = y_train ./ nc
+    end
 
     # get k(x,x') function from kernel object
-    kernel = kernel_function(kernel)
-
+    kernel = kernel_function(kernel; d=distance_fn, z=z)
     # fill kernel matrix with values
     K = compute_kernel_matrix(kernel, x_train)
 
@@ -82,7 +96,7 @@ function construct_gpr(x_train, y_train, kernel::Kernel; sparsity_threshold = 0.
     α = CK \ y # α = K + σ_noise*I
 
     # construct struct
-    return GP(kernel, x_train, α, K, CK)
+    return GP(kernel, x_train, α, K, Array(CK), nc)
 end
 
 """
@@ -95,9 +109,8 @@ prediction(x, 𝒢::GP)
 - 'y': prediction
 """
 function prediction(x, 𝒢::GP)
-    # println("𝒢.data $(𝒢.data)") #x_train
-    # println("x $(x)") #x
-    y =  𝒢.α' * 𝒢.kernel.(x, 𝒢.data)
+    x = x./𝒢.nc
+    y =  𝒢.α' * 𝒢.kernel.(x, 𝒢.data) .* 𝒢.nc
     return y
 end
 
@@ -133,6 +146,7 @@ compute_kernel_matrix(kernel, x)
 """
 function compute_kernel_matrix(k, x)
 
+    # println(length(x[1]))
     K = [k(x[i], x[j]) for i in eachindex(x), j in eachindex(x)]
 
     if typeof(K[1,1]) <: Number
@@ -143,17 +157,35 @@ function compute_kernel_matrix(k, x)
     return sK
 end
 
-# function kernel_function(kernel_name, hyperparameters)
-#     k(a,b) = isotropic_kernel_options[kernel_name](hyperparameters)
-#     return k
-# end
+function mean_log_marginal_loss(y_train, 𝒢::GP; add_constant=false)
+    """
+    Computes log marginal loss for each element in the output and averages the results.
+    Assumes noise-free observations.
 
-# this is norm(a-b)^2 but more efficient
-function sq_mag(a,b) # ||a - b||^2
-    ll = 0.0
-    indices = 1:length(a)
-    @inbounds for k in indices
-        ll += (a[k]-b[k])^2
+    log(p(y|X)) = -(1/2) * (y'*α + 2*sum(Diagonal(CK)) + n*log(2*pi))
+    where n is the number of training points and
+
+    # Arguments
+    - 'y_train': (Array). training outputs (prediction), must have the same number as x_train
+    """
+    n = length(𝒢.data)
+    D = length(𝒢.data[1])
+
+    ys = hcat(y_train...)' # n x D
+    # println("$(size(ys[1,:]))")
+
+    if add_constant
+        c = sum([log(𝒢.CK[i,i]) for i in 1:n]) + 0.5*n*log(2*pi)
+        total_loss=0.0
+        for i in 1:D
+            total_loss -= 0.5*ys[:,i]'*𝒢.α[:,i] + c
+        end
+    else
+        total_loss=0.0
+        for i in 1:D
+            total_loss -= 0.5*ys[:,i]'*𝒢.α[:,i]
+        end
     end
-    return ll
+
+    return total_loss / D
 end

@@ -13,7 +13,6 @@ const save_figure = false
 filename = "general_strat_16_profiles.jld2"
 data = get_les_data(filename);
 
-##
 
 # pick variable to model
 V = data.T
