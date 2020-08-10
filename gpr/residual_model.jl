@@ -14,8 +14,8 @@ This example uses the ResidualData struct and GP.
     #  - μ: coefficient of viscosity
 
     # T(n+1) = T(n) + Δt * (- ∂z(wT) +  𝓀∂z(∂z(T)))
-    # Gp = -∂z(wT) <- model this
-    # y = T(n+1) - T(n) - Δt * ∂z(∂z(T)) <- or model this
+    # Gp = -∂z(wT)
+    # y = T(n+1) - T(n) - Δt * ∂z(∂z(T))
 
     use GPR to capture the difference between the truth
         Δt(-∂z(wT))
@@ -24,274 +24,116 @@ This example uses the ResidualData struct and GP.
 
     # target
         approx - truth
-
-
 """
 
 using Statistics, LinearAlgebra, Plots
+include("GP1.jl")
 
-const save_figure = false
+"""
+ProfileData
+# Description
+- data structure for preparing profile data from Oceananigans simulations for analysis with gpr, nn, or ed.
+# Data Structure and Description
+    v::Array,
+    x::Array,
+    y::Array,
+    x_train::Array, training inputs (predictors; array of states). (length-n array of D-length vectors, where D is the length of each input n is the number of training points)
+    y_train::Array, training outputs (predictions) (length-n array of D-length vectors).
+    x_verification::Array
+    y_verification::Array
+    z::Vector, depth values averaged to D gridpoints
+    t::Array, timeseries [seconds]
+    Nt::Int64, length(timeseries)
+"""
+struct ResidualData
+    truth
+    approx
+end
 
-include("kernels.jl")
-include("profile_gpr_sandbox.jl")
+# get_truth(𝒟::ProfileData, 𝒢::GP)
 
-D = 16 # gridpoints
-log_γs = -3.0:0.1:3.0 # hyperparameter slider range
-log_σs = 0.0:0.1:2.0
+"""
+construct_profile_data(filename, D; N=4)
+# Description
+Returns an instance of ProfileData.
+# Arguments
+- 'data': (string). ProfileData instance containing wT profile data
+- 'D' (integer). Number of gridpoints in the z direction to average the data to.
+# Keyword Arguments
+- 'N': (integer). Interval between the timesteps to be reserved for training data (default 4).
+                If N=4, the profile data for every 4 timesteps will be reserved for training (~25% training data);
+                the rest will be used in the verification set.
+"""
+δ(ϕ, z) = diff(ϕ) ./ diff(z)
 
-d = l2_norm
+function construct_residual_data(filename, D; N=4)
 
-# file to gather data from
+    # return ProfileData(V, vavg, x, y, x_train, y_train, verification_set, z, zavg, t, Nt, n_train)
+end
+
+
 # filename = "general_strat_16_profiles.jld2"
-filename = "general_strat_32_profiles.jld2"
+filename = "dns_profiles.jld2"
+D = 16
+N = 4
 
-# which variable to explore
-V_name = Dict("T" =>"Temperature [°C]", "wT"=>"Temperature flux [°C⋅m/s]")
+𝒟_wT = construct_profile_data(filename, "wT", D; N=N)
+𝒟_T  = construct_profile_data(filename, "T",  D; N=N)
+Nt = 𝒟_wT.Nt
+t = 𝒟_wT.t
+Δt = t[2]-t[1]
+κₑ = 𝒟_wT.κₑ
 
-smooth = false # smooth the profile
-normalize = true # normalize the data (pre- / postprocessing)
+avgd = false
+smooth = false
 
-# distance metric
-dist_metric = Dict(1  =>  "l²-norm:  d(x,x') = || x - x' ||",
-                   2  =>  "H¹-norm:  d(x,x') = || diff(x)./diff(z) - diff(x')./diff(z) ||",
-                   3 =>  "H⁻¹-norm: d(x,x') = || diff(x).*diff(z) - diff(x').*diff(z) ||"
-                  )
-
-kern = Dict("Squared exponential"           => "Squared exponential kernel:           k(x,x') = σ * exp( - ||x-x'||² / 2γ² )",
-            "Matern 1/2"                    => "Matérn with ʋ=1/2:                    k(x,x') = σ * exp( - ||x-x'|| / γ )",
-            "Matern 3/2"                    => "Matérn with ʋ=3/2:                    k(x,x') = σ * (1+c) * exp(-√(3)*||x-x'||)/γ)",
-            "Matern 5/2"                    => "Matérn with ʋ=5/2:                    k(x,x') = σ * ( 1 + √(5)*||x-x'||)/γ + 5*||x-x'||²/(3*γ^2) ) * exp(-√(5)*||x-x'||)/γ)",
-            "Rational quadratic w/ α=1"     => "Rational quadratic kernel:            k(x,x') = σ * (1+(x-x')'*(x-x')/(2*α*(γ²))^(-α)",
-            )
-
-# kernel choice
-kern = 4
-
-data = construct_profile_data(filename, "T", D; N=4, verbose=true)
-
-function get_kernel(k::Int64, γ, σ)
-    # convert from log10 scale
-    γ = 10^γ
-    σ = 10^σ
-  if k==1; return SquaredExponentialKernelI(γ, σ) end
-  if k==2; return Matern12I(γ, σ) end
-  if k==3; return Matern32I(γ, σ) end
-  if k==4; return Matern52I(γ, σ) end
-  if k==5; return RationalQuadraticI(γ, σ, 1.0)
-  else; throw(error()) end
-end
-
-
-# log_γs = -0.4:0.001:-0.3
-println(get_min_gamma(kern, data, normalize, d, log_γs))
-
-# find the minimizing gamma value then animate
-# min_gamma, min_error = get_min_gamma(kern, data, normalize, d, log_γs)
-# kernel = get_kernel(kern, min_gamma, 0.0)
-# 𝒢 = construct_gpr(data.x_train, data.y_train, kernel; distance_fn=d, z=data.zavg, normalize=normalize);
-# gpr_prediction = get_gpr_pred(𝒢, data)
-
-# animation_set = 1:30:(data.Nt-2)
-# anim = @animate for i in animation_set
-#
-#     exact = data.v[:,i+1]
-#     day_string = string(floor(Int, data.t[i]/86400))
-#     p1 = scatter(gpr_prediction[i+1], data.zavg, label = "GP")
-#     plot!(exact, data.z, legend = :topleft, label = "LES", xlabel = "$(V_name["T"])", ylabel = "depth", title = "day " * day_string, xlims = (19,20))
-#     display(p1)
-#
-# end
-# if save_figure == true
-#     gif(anim, pwd() * "gp_emulator.gif", fps = 15)
-#     mp4(anim, pwd() * "gp_emulator.mp4", fps = 15)
-# end
-
-##
-
-function error_comparison(k::Int64, data::ProfileData, normalize, d, γs)
-    # Mean error on greedy check correlated with mean error on true check?
-
-    mlls = zeros(length(γs)) # mean log marginal likelihood
-    mes  = zeros(length(γs)) # mean error (greedy check)
-    mets  = zeros(length(γs)) # mean error (true check)
-
-    for i in 1:length(γs)
-
-        kernel = get_kernel(k, γs[i], 0.0)
-        𝒢 = construct_gpr(data.x_train, data.y_train, kernel; distance_fn=d, z=data.zavg, normalize=normalize);
-
-        # -----compute mll loss----
-        mlls[i] = -1*mean_log_marginal_loss(data.y_train, 𝒢, add_constant=false)
-
-        # -----compute mean error for greedy check (same as in plot log error)----
-        total_error = 0.0
-        # greedy check
-        verification_set = data.verification_set
-        for j in eachindex(verification_set)
-            test_index = verification_set[j]
-            y_prediction = prediction([data.x[test_index]], 𝒢)
-            error = l2_norm(y_prediction, data.y[test_index])
-            total_error += error
-        end
-        mes[i] = total_error/length(verification_set)
-
-        # -----compute mean error for true check----
-        total_error = 0.0
-        gpr_prediction = get_gpr_pred(𝒢, data)
-        for i in 1:data.Nt-2
-            exact    = data.y[i+1]
-            predi    = gpr_prediction[i+1]
-            total_error += l2_norm(exact, predi) # euclidean distance
-        end
-        mets[i] = total_error/(data.Nt-2)
+if avgd
+    wT = 𝒟_wT.vavg
+    T = 𝒟_T.vavg
+    z = 𝒟_wT.zavg
+    ∂wT∂z = [δ(q, z) for q in wT] # Δt(∂z(wT))
+    # Δt * ∂z(∂z(T)) + T(n) - T(n+1)
+    Δt∂²T∂z² = [δ( δ(q,z), z[1:end-1] )*Δt for q in T]
+    approx = [κₑ*Δt∂²T∂z²[i] .+ T[i][1:end-2] .- T[i+1][1:end-2] for i in 1:(Nt-1)]
+else
+    wT = 𝒟_wT.v
+    if smooth
+        wT = smooth_window(wT)
     end
 
-    ylims = ( minimum([minimum(mets), minimum(mes)]) , maximum([maximum(mets), maximum(mes)]) )
-
-    mll_plot = plot(γs, mlls, xlabel="log(γ)", title="negative mean log marginal likelihood, P(y|X)", legend=false, yscale=:log10) # 1D plot: mean log marginal loss vs. γ
-    vline!([γs[argmin(mlls)]])
-    mes_plot  = plot(γs, mes,  xlabel="log(γ)", title="ME on greedy check, min = $(round(minimum(mes);digits=5))", legend=false, yscale=:log10, ylims=ylims)  # 1D plot: mean error vs. γ
-    vline!([γs[argmin(mes)]])
-    met_plot  = plot(γs, mets,  xlabel="log(γ)", title="ME on true check, min = $(round(minimum(mets);digits=5))", legend=false, yscale=:log10, ylims=ylims)  # 1D plot: mean error vs. γ
-    vline!([γs[argmin(mets)]])
-
-    return plot(mll_plot, mes_plot, met_plot, layout = @layout [a ; b; c])
+    T  = 𝒟_T.v
+    z  = 𝒟_wT.z
+    ∂wT∂z = [δ(wT[:,i+1], z)*Δt for i in 1:Nt-1] # Δt(∂z(wT))
+    # Δt * ∂z(∂z(T)) + T(n) - T(n+1)
+    Δt∂²T∂z² = [δ( δ(T[:,i],z), z[1:end-1] )*Δt for i in 1:Nt]
+    approx = [κₑ.*2*Δt∂²T∂z²[i] .+ T[:,i][1:end-2] .- T[:,i+2][1:end-2] for i in 1:(Nt-2)]
 end
 
+# Δt(-∂z(wT)) = T(n+1) - T(n) - Δt * ∂z(∂z(T))
+# Δt(∂z(wT)) = Δt * ∂z(∂z(T)) + T(n) - T(n+1)
 
-filename = "general_strat_32_profiles.jld2"
-D = 16 # gridpoints
-log_γs = -3.0:0.01:3.0 # hyperparameter slider range
-data = construct_profile_data(filename, "T", D; N=4, verbose=true)
-
-p = error_comparison(1, data, normalize, l2_norm, log_γs)
-savefig(pwd() * "/plots/hyperparameter_landscapes/SE_γ_landscapes_gs16_l2norm.png")
-
-p = error_comparison(2, data, normalize, l2_norm, log_γs)
-savefig(pwd() * "/plots/hyperparameter_landscapes/M12_γ_landscapes_gs16_l2norm.png")
-
-p = error_comparison(3, data, normalize, l2_norm, log_γs)
-savefig(pwd() * "/plots/hyperparameter_landscapes/M32_γ_landscapes_gs16_l2norm.png")
-
-p = error_comparison(4, data, normalize, l2_norm, log_γs)
-savefig(pwd() * "/plots/hyperparameter_landscapes/M52_γ_landscapes_gs16_l2norm.png")
-
-p = error_comparison(5, data, normalize, l2_norm, log_γs)
-savefig(pwd() * "/plots/hyperparameter_landscapes/RQ_α1_γ_landscapes_gs16_l2norm.png")
+# animation_set = 1:20:(Nt)
+animation_set = 1:50
+anim = @animate for i in animation_set
+    day_string = string(floor(Int, t[i]/86400))
+    p1 = scatter(∂wT∂z[i], z, label = "Δt*∂z(wT)", xlims=(-2e-6,2e-6))
+    # scatter!(approx[i], z[1:end-2], legend = :topleft, label = "∂z(∂z(T)) + T(n) - T(n+1)", ylabel = "depth", title = "day " * day_string)
+    scatter!(approx[i], z[1:end-2], legend = :topright, label = "Δt*κₑ*∂z(∂z(T)) + T(n) - T(n+1)", ylabel = "depth", title = "t = $(𝒟_wT.t[i])")
+end
+gif(anim, pwd() * "/try2_dns.gif", fps = 2)
 
 
-##
 
-function mes_plot_file_comparison(k::Int64, normalize, d, γs)
-    # Mean error on greedy check correlated with mean error on true check?
-
-    results = Dict()
-    for file in ["general_strat_8_profiles.jld2","general_strat_16_profiles.jld2","general_strat_32_profiles.jld2"]
-
-        𝒟 = construct_profile_data(file, "T", 16; N=4)
-        mets  = zeros(length(γs)) # mean error (true check)
-
-        for i in 1:length(γs)
-            kernel = get_kernel(k, γs[i], 0.0)
-            𝒢 = construct_gpr(𝒟.x_train, 𝒟.y_train, kernel; distance_fn=d, z=𝒟.zavg, normalize=normalize);
-            # -----compute mean error for true check----
-            total_error = 0.0
-            gpr_prediction = get_gpr_pred(𝒢, 𝒟)
-            for i in 1:𝒟.Nt-2
-                exact    = 𝒟.y[i+1]
-                predi    = gpr_prediction[i+1]
-                total_error += l2_norm(exact, predi) # euclidean distance
-            end
-            mets[i] = total_error/(𝒟.Nt-2)
+function smooth_window(wT)
+    # takes in an Nz x Nt array
+    Nz, Nt = size(wT)
+    smooth_wT = similar(wT)
+    for i in 2:(Nz-1)
+        for j in 1:Nt
+            smooth_wT[i,j] = (wT[i-1,j] + wT[i+1,j])/2
         end
-
-        results[file]=mets
     end
-
-    ylims = (0.0005,0.05)
-
-    r1 = results["general_strat_8_profiles.jld2"]
-    γ=γs[argmin(r1)]
-    p1 = plot(γs, r1, xlabel="log(γ)", ylabel="ME, true check", title="general_strat_8_profiles, log(γ)=$(γ), min = $(round(minimum(r1);digits=3))", legend=false, yscale=:log10, ylims=ylims) # 1D plot: mean log marginal loss vs. γ
-    vline!([γ])
-
-    r2 = results["general_strat_16_profiles.jld2"]
-    γ=γs[argmin(r2)]
-    p2  = plot(γs, r2,  xlabel="log(γ)", ylabel="ME, true check", title="general_strat_16_profiles, log(γ)=$(γ), min = $(round(minimum(r2);digits=3))", legend=false, yscale=:log10, ylims=ylims)  # 1D plot: mean error vs. γ
-    vline!([γ])
-
-    r3 = results["general_strat_32_profiles.jld2"]
-    γ=γs[argmin(r3)]
-    p3  = plot(γs, r3,  xlabel="log(γ)", ylabel="ME, true check", title="general_strat_32_profiles, log(γ)=$(γ), min = $(round(minimum(r3);digits=3))", legend=false, yscale=:log10, ylims=ylims)  # 1D plot: mean error vs. γ
-    vline!([γ])
-
-    return plot(p1, p2, p3, layout = @layout [a ; b; c])
+    return smooth_wT
 end
 
-p = mes_plot_file_comparison(1, normalize, l2_norm, -0.2:0.001:0.2)
-savefig(pwd() * "/plots/hyperparameter_landscapes_constlims/compare_les_SE_γ_landscapes_l2norm.png")
-p = mes_plot_file_comparison(2, normalize, l2_norm, 3.8:0.001:4.3)
-savefig(pwd() * "/plots/hyperparameter_landscapes_constlims/compare_les_M12_γ_landscapes_l2norm.png")
-
-p = mes_plot_file_comparison(3, normalize, l2_norm, -0.3:0.001:0.3)
-savefig(pwd() * "/plots/hyperparameter_landscapes_constlims/compare_les_M32_γ_landscapes_l2norm.png")
-
-p = mes_plot_file_comparison(4, normalize, l2_norm, -0.3:0.01:0.3)
-savefig(pwd() * "/plots/hyperparameter_landscapes_constlims/compare_les_M52_γ_landscapes_l2norm.png")
-
-p = mes_plot_file_comparison(5, normalize, l2_norm, -0.2:0.001:0.2)
-savefig(pwd() * "/plots/hyperparameter_landscapes_constlims/compare_les_RQ_α1_γ_landscapes_l2norm.png")
-
-## wide
-
-log_γs = -3.0:0.1:3.0
-p = mes_plot_file_comparison(1, normalize, l2_norm, log_γs)
-savefig(pwd() * "/plots/hyperparameter_landscapes_constlims/compare_les_wide_SE_γ_landscapes_l2norm.png")
-
-p = mes_plot_file_comparison(2, normalize, l2_norm, 2.0:0.1:5.0)
-savefig(pwd() * "/plots/hyperparameter_landscapes_constlims/compare_les_wide_M12_γ_landscapes_l2norm.png")
-
-p = mes_plot_file_comparison(3, normalize, l2_norm, log_γs)
-savefig(pwd() * "/plots/hyperparameter_landscapes_constlims/compare_les_wide_M32_γ_landscapes_l2norm.png")
-
-p = mes_plot_file_comparison(4, normalize, l2_norm, log_γs)
-savefig(pwd() * "/plots/hyperparameter_landscapes_constlims/compare_les_wide_M52_γ_landscapes_l2norm.png")
-
-p = mes_plot_file_comparison(5, normalize, l2_norm, log_γs)
-savefig(pwd() * "/plots/hyperparameter_landscapes_constlims/compare_les_wide_RQ_α1_γ_landscapes_l2norm.png")
-
-## wide with h1_norm
-
-log_γs = -3.0:0.1:3.0
-p = mes_plot_file_comparison(1, normalize, h1_norm, log_γs)
-savefig(pwd() * "/plots/hyperparameter_landscapes_constlims/compare_les_wide_SE_γ_landscapes_h1norm.png")
-
-p = mes_plot_file_comparison(2, normalize, h1_norm, 2.0:0.1:5.0)
-savefig(pwd() * "/plots/hyperparameter_landscapes_constlims/compare_les_wide_M12_γ_landscapes_h1norm.png")
-
-p = mes_plot_file_comparison(3, normalize, h1_norm, log_γs)
-savefig(pwd() * "/plots/hyperparameter_landscapes_constlims/compare_les_wide_M32_γ_landscapes_h1norm.png")
-
-p = mes_plot_file_comparison(4, normalize, h1_norm, log_γs)
-savefig(pwd() * "/plots/hyperparameter_landscapes_constlims/compare_les_wide_M52_γ_landscapes_h1norm.png")
-
-p = mes_plot_file_comparison(5, normalize, h1_norm, log_γs)
-savefig(pwd() * "/plots/hyperparameter_landscapes_constlims/compare_les_wide_RQ_α1_γ_landscapes_h1norm.png")
-
-## wide with hm1_norm
-
-log_γs = -3.0:0.1:3.0
-p = mes_plot_file_comparison(1, normalize, hm1_norm, log_γs)
-savefig(pwd() * "/plots/hyperparameter_landscapes_constlims/compare_les_wide_SE_γ_landscapes_hm1norm.png")
-
-p = mes_plot_file_comparison(2, normalize, hm1_norm, 2.0:0.1:5.0)
-savefig(pwd() * "/plots/hyperparameter_landscapes_constlims/compare_les_wide_M12_γ_landscapes_hm1norm.png")
-
-p = mes_plot_file_comparison(3, normalize, hm1_norm, log_γs)
-savefig(pwd() * "/plots/hyperparameter_landscapes_constlims/compare_les_wide_M32_γ_landscapes_hm1norm.png")
-
-p = mes_plot_file_comparison(4, normalize, hm1_norm, log_γs)
-savefig(pwd() * "/plots/hyperparameter_landscapes_constlims/compare_les_wide_M52_γ_landscapes_hm1norm.png")
-
-p = mes_plot_file_comparison(5, normalize, hm1_norm, log_γs)
-savefig(pwd() * "/plots/hyperparameter_landscapes_constlims/compare_les_wide_RQ_α1_γ_landscapes_hm1norm.png")
+smooth_window(wT)

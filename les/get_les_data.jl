@@ -3,10 +3,10 @@ function get_les_data(filename::String)
 
     include("../les/output_to_data.jl")
 
-    if filename[end-3:end]==".nc"
+    if filename[end-2:end]==".nc"
         println("Collecting NetCDF data.")
         # include("../les/convert_netcdf_to_data.jl")
-        filename="~/Desktop/OceanConvect/les/data/$(filename[1:end-3])/$(filename)"
+        filename=homedir()*"/Desktop/OceanConvect/les/data/$(filename[1:end-3])/$(filename)"
         return ReadNetCDF_OceananigansData(filename)
     else
         println("Collecting JLD2 data.")

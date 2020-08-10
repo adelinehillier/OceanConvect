@@ -4,6 +4,8 @@ Adapted from sandreza/Learning/sandbox/oceananigans_converter.jl
 https://github.com/sandreza/Learning/blob/master/sandbox/oceananigans_converter.jl
 """
 
+using JLD2, NetCDF
+
 struct OceananigansData{𝒮, 𝒯, 𝒰, 𝒱}
     # initial conditions, 4
     T⁰::𝒮
@@ -32,6 +34,8 @@ struct OceananigansData{𝒮, 𝒯, 𝒰, 𝒱}
     f⁰::𝒰
     g::𝒰
     L::𝒰
+    κₑ::𝒰
+
 
     # time and grid, 2
     t::𝒮
@@ -171,9 +175,10 @@ function ReadJLD2_OceananigansData(filename)
     f⁰ = les_data["coriolis"]["f"]
     g = les_data["buoyancy"]["gravitational_acceleration"]
     L = les_data["grid"]["Lz"]
+    κₑ = les_data["parameters"]["diffusivity_T"]
 
     # Push parameters to container
-    push!(container, ρ, α, β, cᵖ, f⁰, g, L)
+    push!(container, ρ, α, β, cᵖ, f⁰, g, L, κₑ)
 
     # grab domain data
     z = collect(les_data["grid"]["zC"])
@@ -261,6 +266,7 @@ OceananigansData(filename)
 """
 function ReadNetCDF_OceananigansData(filename)
 
+
     ncinfo(filename)
     x = Array(NetCDF.open(filename, "yC"))
     y = Array(NetCDF.open(filename, "yC"))
@@ -268,10 +274,12 @@ function ReadNetCDF_OceananigansData(filename)
     t = Array(NetCDF.open(filename, "time"))
     sim_day = t ./ 86400
     z = (z[2:end] + z[1:end-1]) / 2
-    b = NetCDF.open(filename, "b")
-    u = NetCDF.open(filename, "u")
-    v = NetCDF.open(filename, "v")
-    w = NetCDF.open(filename, "w")
+
+    vectify(x) = [x[i] for i in 1:length(x)]
+    b = vectify(NetCDF.open(filename, "b"))
+    u = vectify(NetCDF.open(filename, "u"))
+    v = vectify(NetCDF.open(filename, "v"))
+    w = vectify(NetCDF.open(filename, "w"))
     ##
 
     # T = b./(g*α)
@@ -281,8 +289,8 @@ function ReadNetCDF_OceananigansData(filename)
     container = []
 
     # size of arrays
-    Nz = length(collect(les_data["grid"]["zC"]))
-    Nt = length(timeseries_keys)
+    Nz = length(z)
+    Nt = length(t)
 
     ## construct arrays
     #Initial Conditions
@@ -379,8 +387,6 @@ function ReadNetCDF_OceananigansData(filename)
 
     # push to container
     push!(container, info_string)
-    #return container
-    close(les_data)
     return OceananigansData{𝒮, 𝒯, 𝒰, 𝒱}(container...)
 end
 

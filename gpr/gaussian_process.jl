@@ -9,6 +9,7 @@ using LinearAlgebra
 using BenchmarkTools
 
 include("kernels.jl")
+include("scalings.jl")
 include("../les/custom_avg.jl")
 
 """
@@ -31,7 +32,6 @@ struct GP{ℱ, 𝒮, 𝒮2, 𝒰, 𝒱}
     α::𝒮2
     K::𝒰
     CK::𝒱
-    nc::Number
 end
 
 """
@@ -56,15 +56,15 @@ Constructs the posterior distribution for a GP. In other words this does the 'tr
 # Return
 - 'GP Object': (GP).
 """
-function construct_gpr(x_train, y_train, kernel::Kernel; distance_fn=l2_norm, z=nothing, normalize=true, sparsity_threshold = 0.0, robust = true, entry_threshold = sqrt(eps(1.0)))
+function construct_gpr(x_train, y_train, kernel::Kernel; distance_fn=l2_norm, z=nothing, sparsity_threshold = 0.0, robust = true, entry_threshold = sqrt(eps(1.0)))
 
     # preprocessing
-    nc = 1.0 # normalization constant
-    if normalize
-        nc = maximum(maximum, x_train)
-        x_train = x_train ./ nc
-        y_train = y_train ./ nc
-    end
+        # nc = 1.0 # normalization constant
+        # if normalize
+        #     nc = maximum(maximum, x_train)
+        #     x_train = x_train ./ nc
+        #     y_train = y_train ./ nc
+        # end
 
     # get k(x,x') function from kernel object
     kernel = kernel_function(kernel; d=distance_fn, z=z)
@@ -96,8 +96,45 @@ function construct_gpr(x_train, y_train, kernel::Kernel; distance_fn=l2_norm, z=
     α = CK \ y # α = K + σ_noise*I
 
     # construct struct
-    return GP(kernel, x_train, α, K, Array(CK), nc)
+    return GP(kernel, x_train, α, K, Array(CK))
 end
+
+
+function construct_gpr(x_train, y_train, kernel::Kernel; distance_fn=l2_norm, z=nothing, sparsity_threshold = 0.0, robust = true, entry_threshold = sqrt(eps(1.0)))
+
+    # get k(x,x') function from kernel object
+    kernel = kernel_function(kernel; d=distance_fn, z=z)
+    # fill kernel matrix with values
+    K = compute_kernel_matrix(kernel, x_train)
+
+    # get the maximum entry for scaling and sparsity checking
+    mK = maximum(K)
+
+    # make Cholesky factorization work by adding a small amount to the diagonal
+    if robust
+        K += mK*sqrt(eps(1.0))*I
+    end
+
+    # check sparsity
+    bools = K .> entry_threshold * mK
+    sparsity = sum(bools) / length(bools)
+    if sparsity < sparsity_threshold
+        sparse_K = similar(K) .* 0
+        sparse_K[bools] = sK[bools]
+        K = sparse(Symmetric(sparse_K))
+        CK = cholesky(K)
+    else
+        CK = cholesky(K)
+    end
+
+    # get prediction weights FIX THIS SO THAT IT ALWAYS WORKS
+    y = hcat(y_train...)'
+    α = CK \ y # α = K + σ_noise*I
+
+    # construct struct
+    return GP(kernel, x_train, α, K, Array(CK))
+end
+
 
 """
 prediction(x, 𝒢::GP)
@@ -108,11 +145,22 @@ prediction(x, 𝒢::GP)
 # Return
 - 'y': prediction
 """
+# function prediction(x, 𝒢::GP, scaling)
+#     if scaling != nothing
+#         # println("x_before $(x)")
+#         x = forward(x, scaling)
+#         # println("x $(x)")
+#         scaled_prediction = 𝒢.α' * 𝒢.kernel.([x], 𝒢.data)
+#         # println("scaled_prediction $(scaled_prediction)")
+#         return backward(scaled_prediction, scaling)
+#     else
+#         return 𝒢.α' * 𝒢.kernel.([x], 𝒢.data)
+#     end
+# end
 function prediction(x, 𝒢::GP)
-    x = x./𝒢.nc
-    y =  𝒢.α' * 𝒢.kernel.(x, 𝒢.data) .* 𝒢.nc
-    return y
+    return 𝒢.α' * 𝒢.kernel.([x], 𝒢.data)
 end
+
 
 """
 uncertainty(x, 𝒢::GP)

@@ -112,6 +112,7 @@ function OceananigansData(filename)
     # Push second order statistics into container
     push!(container, wT, wS, uu, vv, ww)
 
+    println(les_data["parameters"])
     # Now grab parameter
     ρ = les_data["parameters"]["density"]
     α = les_data["buoyancy"]["equation_of_state"]["α"]
@@ -120,9 +121,10 @@ function OceananigansData(filename)
     f⁰ = les_data["coriolis"]["f"]
     g = les_data["buoyancy"]["gravitational_acceleration"]
     L = les_data["grid"]["Lz"]
+    κₑ = les_data["parameters"]["diffusivity_T"]
 
     # Push parameters to container
-    push!(container, ρ, α, β, cᵖ, f⁰, g, L)
+    push!(container, ρ, α, β, cᵖ, f⁰, g, L, κₑ)
 
     # grab domain data
     z = collect(les_data["grid"]["zC"])

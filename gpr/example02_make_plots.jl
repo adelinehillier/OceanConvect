@@ -1,11 +1,10 @@
 """
-This example does uses the ProfileData struct and GP.
+This example uses the ProfileData struct and GP.
 """
 
 include("GP1.jl")
 
 log_γs = -3.0:0.1:3.0
-log_σs = 0.0:0.1:2.0
 
 V_name = Dict("T" =>"Temperature [°C]", "wT"=>"Temperature flux [°C⋅m/s]")
 
@@ -16,93 +15,10 @@ N = 4
 # N = 2
 
 ##
-#  *--*--*--*--*--*--*--*--*--*
-#  | Error metric comparison  |
-#  *--*--*--*--*--*--*--*--*--*
 
-filename = "general_strat_16_profiles.jld2"
-data = construct_profile_data(filename, v_str, 16; N=N)
-log_γs = -3.0:0.1:3.0 # hyperparameter slider range
+p = me_file_comparison2(2, l2_norm, 4.8:0.01:6.0, v_str; N=2)
+savefig(pwd() * "/hyperparameter_landscapes/rescaled_$(v_str)/compare_sim_SE_γ_landscapes_l2norm_k2_neighborhood_cscrapr_N2.png")
 
-for k in 1:5
-    #with normalization
-    p = error_metric_comparison(k, data, l2_norm, log_γs, true)
-    savefig(pwd() * "/hyperparameter_landscapes/with_normalization_$(v_str)/kernel$(k)_γ_gs16_l2norm.png")
-    #no normalization
-    p = error_metric_comparison(k, data, l2_norm, log_γs, false)
-    savefig(pwd() * "/hyperparameter_landscapes/no_normalization_$(v_str)/kernel$(k)_γ_gs16_l2norm.png")
-end
-
-##
-#  *--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*
-#  | ME on true check for gs8 vs gs16 vs gs32: fixed range of γs  |
-#  *--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*
-
-# ------- L2 norm -------
-for k in 1:5
-
-    if k==2; log_γs = 0.0:0.1:6.0
-    else; log_γs = -3.0:0.1:3.0
-    end
-
-    #with normalization
-    p = me_file_comparison(k, l2_norm, log_γs, v_str; normalize=true)
-    savefig(pwd() * "/hyperparameter_landscapes/with_normalization_$(v_str)/compare_sims_kernel$(k)_γ_l2norm.png")
-    #no normalization
-    p = me_file_comparison(k, l2_norm, log_γs, v_str; normalize=false)
-    savefig(pwd() * "/hyperparameter_landscapes/no_normalization_$(v_str)/compare_sims_kernel$(k)_γ_l2norm.png")
-end
-# ------- H1 norm -------
-for k in 1:5
-
-    if k==2; log_γs = 0.0:0.1:6.0
-    else; log_γs = -3.0:0.1:3.0
-    end
-
-    #with normalization
-    p = me_file_comparison(k, h1_norm, log_γs, v_str; normalize=true)
-    savefig(pwd() * "/hyperparameter_landscapes/with_normalization_$(v_str)/compare_sims_kernel$(k)_γ_h1norm.png")
-    #no normalization
-    p = me_file_comparison(k, h1_norm, log_γs, v_str; normalize=false)
-    savefig(pwd() * "/hyperparameter_landscapes/no_normalization_$(v_str)/compare_sims_kernel$(k)_γ_h1norm.png")
-end
-
-# ------- H^-1 norm -------
-for k in 1:5
-
-    if k==2; log_γs = 0.0:0.1:6.0
-    else; log_γs = -3.0:0.1:3.0
-    end
-
-    #with normalization
-    p = me_file_comparison(k, hm1_norm, log_γs, v_str; normalize=true)
-    savefig(pwd() * "/hyperparameter_landscapes/with_normalization_$(v_str)/compare_sims_kernel$(k)_γ_hm1norm.png")
-    #no normalization
-    p = me_file_comparison(k, hm1_norm, log_γs, v_str; normalize=false)
-    savefig(pwd() * "/hyperparameter_landscapes/no_normalization_$(v_str)/compare_sims_kernel$(k)_γ_hm1norm.png")
-end
-
-##
-#  *--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*
-#  | ME on true check for gs8 vs gs16 vs gs32: neighborhood of the min  |
-#  *--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*
-# custom γ ranges
-# l2_norm
-
-p = me_file_comparison(1, l2_norm, 3.8:0.001:4.3, v_str; normalize=true)
-savefig(pwd() * "/plots/hyperparameter_landscapes_constlims_with_normalization_$(v_str)/compare_les_SE_γ_landscapes_l2norm.png")
-
-p = me_file_comparison(2, l2_norm, 3.8:0.001:4.3, v_str; normalize=true)
-savefig(pwd() * "/plots/hyperparameter_landscapes_constlims_with_normalization_$(v_str)/compare_les_M12_γ_landscapes_l2norm.png")
-
-p = me_file_comparison(3, l2_norm, -0.3:0.001:0.3, v_str; normalize=true)
-savefig(pwd() * "/plots/hyperparameter_landscapes_constlims_with_normalization_$(v_str)/compare_les_M32_γ_landscapes_l2norm.png")
-
-p = me_file_comparison(4, l2_norm, -0.3:0.01:0.3, v_str; normalize=true)
-savefig(pwd() * "/plots/hyperparameter_landscapes_constlims_with_normalization_$(v_str)/compare_les_M52_γ_landscapes_l2norm.png")
-
-p = me_file_comparison(5, l2_norm, -0.2:0.001:0.2, v_str; normalize=true)
-savefig(pwd() * "/plots/hyperparameter_landscapes_constlims_with_normalization_$(v_str)/compare_les_RQ_α1_γ_landscapes_l2norm.png")
 
 ##
 #  *--*--*--*--*--*--*
@@ -118,15 +34,9 @@ function animate_profile_trained_on_gs16(filename, k::Int64, γ, d, D)
     kernel = get_kernel(k, γ, 0.0)
 
     data16 = construct_profile_data("general_strat_16_profiles.jld2", v_str, D; N=N, verbose=true)
-    𝒢 = construct_gpr(data16.x_train, data16.y_train, kernel; distance_fn=d, z=data16.zavg, normalize=normalize);
+    𝒢 = construct_gpr(data16.x_train, data16.y_train, kernel; distance_fn=d, z=data16.zavg);
 
-    # 𝒢 = construct_gpr(data.x_train, data.y_train, kernel; distance_fn=d, z=data.zavg, normalize=normalize);
     gpr_prediction = get_gpr_pred(𝒢, mydata)
-
-    # println(mydata.x[1])
-
-    println(prediction([collect(1:16)], 𝒢))
-
 
     animation_set = 1:10:(mydata.Nt-2)
     anim = @animate for i in animation_set
@@ -150,9 +60,111 @@ function animate_profile_trained_on_gs16(filename, k::Int64, γ, d, D)
     return anim
 end
 
-filename="general_strat_8_profiles"
-anim = animate_profile("$(filename).jld2", 2, 4.1, l2_norm, 16)
-gif(anim, pwd() * "/../les/data_sandreza/$(filename)/gp_γ4.1_M12_l2norm_trainedOnGs16.gif", fps = 20)
+filename="general_strat_32_profiles"
+anim = animate_profile_trained_on_gs16("$(filename).jld2", 2, 0.3, l2norm_strat_penalty, 16)
+gif(anim, pwd() * "/../les/data_sandreza/$(filename)/gp_γ4.1_M12_l2norm_strat_penalty_trainedOnGs8_16_32_scaled.gif", fps = 20)
+
+##
+
+filename="general_strat_32_profiles"
+anim = animate_profile("$(filename).jld2", 2, 5.50, l2_norm, 16, "T"; N=2)
+gif(anim, pwd() * "/../les/data_sandreza/$(filename)/gp_γ4.1_M12_l2norm_γ5.5_N2_scaled.gif", fps = 20)
+
+##
+#  *--*--*--*--*--*--*--*--*--*
+#  | Error metric comparison  |
+#  *--*--*--*--*--*--*--*--*--*
+
+filename = "general_strat_16_profiles.jld2"
+data = construct_profile_data(filename, v_str, 16; N=N)
+log_γs = -3.0:0.1:3.0 # hyperparameter slider range
+
+for k in 1:5
+    #with normalization
+    p = error_metric_comparison(k, data, l2_norm, log_γs, true)
+    savefig(pwd() * "/hyperparameter_landscapes/rescaled_$(v_str)/kernel$(k)_γ_gs16_l2norm.png")
+    # #no normalization
+    # p = error_metric_comparison(k, data, l2_norm, log_γs, false)
+    # savefig(pwd() * "/hyperparameter_landscapes/no_normalization_$(v_str)/kernel$(k)_γ_gs16_l2norm.png")
+end
+
+##
+#  *--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*
+#  | ME on true check for gs8 vs gs16 vs gs32: fixed range of γs  |
+#  *--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*
+
+# ------- L2 norm -------
+for k in 1:5
+
+    # if k==2; log_γs = 0.0:0.1:6.0
+    # else; log_γs = -3.0:0.1:3.0
+    # end
+
+    log_γs = -3.0:0.1:3.0
+
+    #with normalization
+    p = me_file_comparison(k, l2_norm, log_γs, v_str)
+    savefig(pwd() * "/hyperparameter_landscapes/rescaled_$(v_str)/compare_sims_kernel$(k)_γ_l2norm.png")
+    # #no normalization
+    # p = me_file_comparison(k, l2_norm, log_γs, v_str; normalize=false)
+    # savefig(pwd() * "/hyperparameter_landscapes/rescaled_$(v_str)/compare_sims_kernel$(k)_γ_l2norm.png")
+end
+# ------- H1 norm -------
+for k in 1:5
+
+    # if k==2; log_γs = 0.0:0.1:6.0
+    # else; log_γs = -3.0:0.1:3.0
+    # end
+
+    log_γs = -3.0:0.1:3.0
+
+    #with normalization
+    p = me_file_comparison(k, h1_norm, log_γs, v_str)
+    savefig(pwd() * "/hyperparameter_landscapes/rescaled_$(v_str)/compare_sims_kernel$(k)_γ_h1norm.png")
+    # #no normalization
+    # p = me_file_comparison(k, h1_norm, log_γs, v_str; normalize=false)
+    # savefig(pwd() * "/hyperparameter_landscapes/no_normalization_$(v_str)/compare_sims_kernel$(k)_γ_h1norm.png")
+end
+
+# ------- H^-1 norm -------
+for k in 1:5
+
+    # if k==2; log_γs = 0.0:0.1:6.0
+    # else; log_γs = -3.0:0.1:3.0
+    # end
+
+    log_γs = -3.0:0.1:3.0
+
+    #with normalization
+    p = me_file_comparison(k, hm1_norm, log_γs, v_str)
+    savefig(pwd() * "/hyperparameter_landscapes/rescaled_$(v_str)/compare_sims_kernel$(k)_γ_hm1norm.png")
+    # #no normalization
+    # p = me_file_comparison(k, hm1_norm, log_γs, v_str; normalize=false)
+    # savefig(pwd() * "/hyperparameter_landscapes/no_normalization_$(v_str)/compare_sims_kernel$(k)_γ_hm1norm.png")
+end
+
+
+##
+#  *--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*
+#  | ME on true check for gs8 vs gs16 vs gs32: neighborhood of the min  |
+#  *--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*
+# custom γ ranges
+# l2_norm
+
+p = me_file_comparison(1, l2_norm, 3.8:0.001:4.3, v_str; normalize=true)
+savefig(pwd() * "/plots/hyperparameter_landscapes_constlims_with_normalization_$(v_str)/compare_les_SE_γ_landscapes_l2norm.png")
+
+p = me_file_comparison(2, l2_norm, 3.8:0.001:4.3, v_str; normalize=true)
+savefig(pwd() * "/plots/hyperparameter_landscapes_constlims_with_normalization_$(v_str)/compare_les_M12_γ_landscapes_l2norm.png")
+
+p = me_file_comparison(3, l2_norm, -0.3:0.001:0.3, v_str; normalize=true)
+savefig(pwd() * "/plots/hyperparameter_landscapes_constlims_with_normalization_$(v_str)/compare_les_M32_γ_landscapes_l2norm.png")
+
+p = me_file_comparison(4, l2_norm, -0.3:0.01:0.3, v_str; normalize=true)
+savefig(pwd() * "/plots/hyperparameter_landscapes_constlims_with_normalization_$(v_str)/compare_les_M52_γ_landscapes_l2norm.png")
+
+p = me_file_comparison(5, l2_norm, -0.2:0.001:0.2, v_str; normalize=true)
+savefig(pwd() * "/plots/hyperparameter_landscapes_constlims_with_normalization_$(v_str)/compare_les_RQ_α1_γ_landscapes_l2norm.png")
 
 ## compare distance metrics
 
@@ -202,36 +214,42 @@ gif(anim, pwd() * "/../les/data_sandreza/$(filename)/gp_γ4.1_M12_l2norm_trained
 
 
 
+
+
 ## automate finding gamma that minimizes the mean error
 
 # filename = "general_strat_16_profiles.jld2"
-filename = "general_strat_32_profiles.jld2"
+v_str = "wT"
+N = 2
 
-# kernel choice
-kern = 4
+filename = "general_strat_16_profiles.jld2"
+data = construct_profile_data(filename, v_str, D; N=N)
 
-data = construct_profile_data(filename, "T", D; N=N, verbose=true)
+normalize = true
 
-kern =
-d =
 
-# find the minimizing gamma value then animate
-min_gamma, min_error = get_min_gamma(kern, data, normalize, d, -0.3:0.1:0.3)
-kernel = get_kernel(kern, min_gamma, 0.0)
-𝒢 = construct_gpr(data.x_train, data.y_train, kernel; distance_fn=d, z=data.zavg, normalize=normalize);
-gpr_prediction = get_gpr_pred(𝒢, data)
+for kern in 1:5
+    for d in [l2_norm, h1_norm, hm1_norm]
 
-animation_set = 1:30:(data.Nt-2)
-anim = @animate for i in animation_set
+        # find the minimizing gamma value then animate
+        min_gamma, min_error = get_min_gamma(kern, data, normalize, d, -0.3:0.1:0.3)
+        kernel = get_kernel(kern, min_gamma, 0.0)
+        𝒢 = construct_gpr(data.x_train, data.y_train, kernel; distance_fn=d, z=data.zavg, normalize=normalize);
+        gpr_prediction = get_gpr_pred(𝒢, data)
 
-    exact = data.v[:,i+1]
-    day_string = string(floor(Int, data.t[i]/86400))
-    p1 = scatter(gpr_prediction[i+1], data.zavg, label = "GP")
-    plot!(exact, data.z, legend = :topleft, label = "LES", xlabel = "$(V_name[v_str])", ylabel = "depth", title="gs32, k=$(kern), $(d), log(γ)=$(min_gamma), error=$(min_error) day " * day_string, xlims = (-1e-5,4e-5))
-    display(p1)
+        animation_set = 1:30:(data.Nt-2)
+        anim = @animate for i in animation_set
 
-end
-save_figure=true
-if save_figure == true
-    gif(anim, pwd() * "/../les/data_sandreza/$(filename)/gp_γ4.1_M12_l2norm_trainedOnGs16.gif", fps = 15)
+            exact = data.v[:,i+1]
+            day_string = string(floor(Int, data.t[i]/86400))
+            p1 = scatter(gpr_prediction[i+1], data.zavg, label = "GP")
+            plot!(exact, data.z, legend = :topleft, label = "LES", xlabel = "$(V_name[v_str])", ylabel = "depth", title="gs32, k=$(kern), $(d), log(γ)=$(min_gamma), error=$(round(min_error;digits=7)) day " * day_string, xlims = (-1e-5,4e-5))
+            display(p1)
+
+        end
+
+        # save animation
+        gif(anim, pwd() * "/../les/data_sandreza/$(filename[1:end-5])/gp_min_gamma_wnormalize_γ$(min_gamma)_k$(kern)_d$(d)_$(v_str)_N$(N).gif", fps = 15)
+
+    end
 end

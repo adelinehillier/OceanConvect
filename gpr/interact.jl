@@ -7,14 +7,13 @@ using Interact, Blink
 include("GP1.jl")
 
 D = 16 # gridpoints
-N = 2  # amount of training data
+N = 4  # amount of training data
 
 # hyperparameter slider ranges
 γs = -3.0:0.1:3.0
 σs = 0.0:0.1:2.0
 
 # smooth = toggle("smooth profile?") # smooth the profile
-# normalize = toggle("normalize?") # normalize the data (pre- / postprocessing)
 smooth=false
 normalize=true
 
@@ -64,7 +63,7 @@ function get_kernel(k::Int64, γ, σ)
     # convert from log10 scale
     γ = 10^γ
     σ = 10^σ
-  if k==1;     return SquaredExponentialKernelI(γ, σ)
+  if k==1;     return SquaredExponentialI(γ, σ)
   elseif k==2; return Matern12I(γ, σ)
   elseif k==3; return Matern32I(γ, σ)
   elseif k==4; return Matern52I(γ, σ)
@@ -84,11 +83,11 @@ data            = map(get_data,                filename, V_name)
 k               = map(get_kernel,              kern, γ1, σ1)
 d               = map(get_d,                   dist_metric)
 k_plot          = map(plot_kernel,             k, d, data)
-gp              = map(get_gp,                  data, k, normalize, d)
+gp              = map(get_gp,                  data, k, d)
 gpr_prediction  = map(get_gpr_pred,            gp, data)
 profile_plot    = map(plot_profile,            gp, data, V_name, time_slider, gpr_prediction)
 log_error_plot  = map(plot_error_histogram,    gp, data, time_slider)
-hyp_landscape   = map(error_metric_comparison, kern, data, d, γs, normalize)
+hyp_landscape   = map(error_metric_comparison, kern, data, d, γs)
 
 # layout
 top    = vbox(hbox(filename, V_name), hbox(kern, dist_metric), hbox(k_plot, hyp_landscape))

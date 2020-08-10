@@ -29,7 +29,7 @@ abstract type Kernel end
 #  *--*--*--*--*--*--*--*--*--*--*--*
 
 """ SquaredExponentialI(γ,σ): squared exponential covariance function, isotropic """
-struct SquaredExponentialKernelI{T<:Float64} <: Kernel
+struct SquaredExponentialI{T<:Float64} <: Kernel
     # Hyperparameters
     "Length scale"
     γ::T
@@ -38,7 +38,7 @@ struct SquaredExponentialKernelI{T<:Float64} <: Kernel
 end
 
 # evaluates the kernel function for a given pair of inputs
-function kernel_function(k::SquaredExponentialKernelI; d=l2_norm, z=nothing)
+function kernel_function(k::SquaredExponentialI; d=l2_norm, z=nothing)
     # k(x,x') = σ * exp( - d(x,x')² / 2γ² )
   evaluate(a,b) = k.σ * exp(- d(a,b,z)^2 / 2*(k.γ)^2 )
   return evaluate
@@ -126,49 +126,6 @@ function kernel_function(k::Matern52I; d=l2_norm, z=nothing)
     end
   return evaluate
 end
-
-#  *--*--*--*--*--*--*--*
-#  | Distance functions |
-#  *--*--*--*--*--*--*--*
-
-δ(Φ, z) = diff(Φ) ./ diff(z)
-
-# this is norm(a-b)^2 but more efficient
-function sq_mag(a,b) # ||a - b||^2
-    ll = 0.0
-    indices = 1:length(a)
-    @inbounds for k in indices
-        ll += (a[k]-b[k])^2
-    end
-    return ll
-end
-
-"""
-l2_norm: computes the Euclidean distance (l²-norm) between two vectors
-"""
-function l2_norm(a,b,z) # d(x,x') = || x - x' ||
-    return sqrt(sq_mag(a,b))
-end
-
-function l2_norm(a,b) # d(x,x') = || x - x' ||
-    return sqrt(sq_mag(a,b))
-end
-
-"""
-h1_norm: computes the H¹-norm w.r.t z of two vectors
-"""
-function h1_norm(a,b,z) # d(x,x') = || diff(x)./diff(z) - diff(x')./diff(z) ||
-    return l2_norm( δ(a, z), δ(b, z) )
-end
-
-"""
-hm1_norm: computes the H⁻¹-norm w.r.t z of two vectors
-"""
-function hm1_norm(a,b,z) # || diff(x).*diff(z) - diff(x').*diff(z) ||
-    return l2_norm(diff(a).*diff(z) , diff(b).*diff(z))
-end
-
-
 
 # """ SquaredExponentialI(γ,σ): squared exponential covariance function, isotropic """
 # struct SquaredExponentialKernelI{T<:Float64} <: Kernel

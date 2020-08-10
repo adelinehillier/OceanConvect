@@ -9,8 +9,10 @@ See example02 for an example that uses ProfileData struct.
 using Statistics, LinearAlgebra, Plots
 
 include("kernels.jl")
-include("gaussian_process.jl")
-include("../les/get_les_data.jl")
+# include("gaussian_process.jl")
+# include("../les/get_les_data.jl")
+
+include("GP1.jl")
 
 const save_figure = false
 
@@ -18,7 +20,9 @@ filename = "general_strat_16_profiles.jld2"
 data = get_les_data(filename);
 
 # pick variable to model
+V_name = "T"
 V = data.T;
+# V_name = "wT"
 # V = data.wT
 
 t = data.t;
@@ -39,20 +43,25 @@ verification_set = setdiff(total_set, training_set);
 x_train = x[training_set];
 y_train = y[training_set];
 
-kernel = SquaredExponentialKernelIso(1.0,1.0); #[γ,σ]
+kernel = Matern12I(1e4,1.0); #[γ,σ]
 𝒢 = construct_gpr(x_train, y_train, kernel);
 
 # index_check = 1
 # y_prediction = prediction([x_train[index_check]], 𝒢)
 # norm(y_prediction - y_train[index_check])
 
+if V_name=="T"; scaling = Tscaling(vavg[1][end]-vavg[1][1]) end # Tscaling(ΔT)
+if V_name=="wT"; scaling = wTscaling( maximum(maximum, vavg) ) end # wTscaling(nc)
+
 # get error at each time in the verification set
 gpr_error = collect(verification_set)*1.0;
 # greedy check
 for j in eachindex(verification_set);
     test_index = verification_set[j];
-    y_prediction = prediction([x[test_index]], 𝒢);
-    δ = norm(y_prediction - y[test_index]);
+    y_prediction = prediction(x[test_index], 𝒢, scaling);
+    println(y_prediction)
+    println(y[test_index])
+    δ = norm(y_prediction .- y[test_index]);
     gpr_error[j] = δ;
 end
 histogram(gpr_error)
@@ -71,13 +80,13 @@ println("The maximum error is " * string(maximum(gpr_error)))
 # the true check
 # time evolution given the same initial condition
 Nt = length(data.t)
-set = 1:(Nt-1)
 gpr_prediction = similar(y[total_set])
 starting = x[1]
 gpr_prediction[1] = starting
 Nt = length(y[total_set])
-for i in set
-    gpr_prediction[i+1] = prediction([gpr_prediction[i]], 𝒢)
+for i in 1:(Nt-1)
+    println(gpr_prediction[i])
+    gpr_prediction[i+1] = prediction(gpr_prediction[i], 𝒢, scaling)
 end
 
 animation_set = 1:30:(Nt-1)
