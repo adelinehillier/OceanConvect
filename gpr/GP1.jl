@@ -10,6 +10,7 @@ include("profile_data.jl")
 include("kernels.jl")
 include("distance_metrics.jl")
 include("scalings.jl")
+include("pre_post_processing.jl")
 include("../les/get_les_data.jl")
 
 export construct_profile_data
@@ -23,18 +24,23 @@ function get_gp(data::ProfileData, kernel::Kernel, d)
     return 𝒢
 end
 
-function get_gpr_pred(gp::GP, data::ProfileData; scaled_up=true)
-    # predict temperature profile from start to finish without the training data
+"""
+get_gpr_pred(gp::GP, data::ProfileData; scaled_up=true)
+Predict temperature profile from start to finish without the training data.
+"""
+function get_gpr_pred(gp::GP, data::ProfileData; unscaled=true)
     gpr_prediction = similar(data.vavg[1:data.Nt-1])
-    starting = data.x[1]
+    starting = data.x[1] # x is scaled
     gpr_prediction[1] = starting
     for i in 1:(data.Nt-2)
-        gpr_prediction[i+1] = prediction(gpr_prediction[i], gp)
+        x = gpr_prediction[i]
+        scaled_pred = prediction(x, gp)
+        gpr_prediction[i+1] = postprocess_prediction(x, scaled_pred, data.processor)
     end
 
-    if scaled_up
-        # post-processing - scale the data back up
-        gpr_prediction = [backward(vec, data.scaling) for vec in gpr_prediction]
+    if unscaled
+        # post-processing - unscale the data for plotting (false for calculating loss)
+        gpr_prediction = [unscale(vec, data.scaling) for vec in gpr_prediction]
     end
     return gpr_prediction
 end
@@ -77,7 +83,7 @@ function get_me_true_check(𝒢::GP, 𝒟::ProfileData)
     # mean error on true check for a single value of γ
     # computed on the scaled down (range [0,1]) profile values
     total_error = 0.0
-    gpr_prediction = get_gpr_pred(𝒢, 𝒟; scaled_up=false)
+    gpr_prediction = get_gpr_pred(𝒢, 𝒟; unscaled=false)
     n = 𝒟.Nt-2
     for i in 1:n
         exact    = 𝒟.y[i+1]

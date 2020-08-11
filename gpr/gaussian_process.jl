@@ -8,8 +8,9 @@ added log marginal likelihood function.
 using LinearAlgebra
 using BenchmarkTools
 
-include("kernels.jl")
-include("scalings.jl")
+include("kernels.jl") # covariance functions
+include("scalings.jl") # normalizing the data
+include("pre_post_processing.jl") # data pre- and post-processing
 include("../les/custom_avg.jl")
 
 """
@@ -58,13 +59,7 @@ Constructs the posterior distribution for a GP. In other words this does the 'tr
 """
 function construct_gpr(x_train, y_train, kernel::Kernel; distance_fn=l2_norm, z=nothing, sparsity_threshold = 0.0, robust = true, entry_threshold = sqrt(eps(1.0)))
 
-    # preprocessing
-        # nc = 1.0 # normalization constant
-        # if normalize
-        #     nc = maximum(maximum, x_train)
-        #     x_train = x_train ./ nc
-        #     y_train = y_train ./ nc
-        # end
+    # all data preprocessing occurs elsewhere.
 
     # get k(x,x') function from kernel object
     kernel = kernel_function(kernel; d=distance_fn, z=z)
@@ -139,24 +134,13 @@ end
 """
 prediction(x, 𝒢::GP)
 # Description
-- Given state x and GP 𝒢, make a prediction
+- Given scaled state x, GP 𝒢, returns a scaled prediction
 # Arguments
-- 'x': state
+- 'x': scaled state
+- '𝒢': GP with which to make the prediction
 # Return
-- 'y': prediction
+- 'y': scaled prediction
 """
-# function prediction(x, 𝒢::GP, scaling)
-#     if scaling != nothing
-#         # println("x_before $(x)")
-#         x = forward(x, scaling)
-#         # println("x $(x)")
-#         scaled_prediction = 𝒢.α' * 𝒢.kernel.([x], 𝒢.data)
-#         # println("scaled_prediction $(scaled_prediction)")
-#         return backward(scaled_prediction, scaling)
-#     else
-#         return 𝒢.α' * 𝒢.kernel.([x], 𝒢.data)
-#     end
-# end
 function prediction(x, 𝒢::GP)
     return 𝒢.α' * 𝒢.kernel.([x], 𝒢.data)
 end

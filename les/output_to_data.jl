@@ -177,6 +177,8 @@ function ReadJLD2_OceananigansData(filename)
     L = les_data["grid"]["Lz"]
     κₑ = les_data["parameters"]["diffusivity_T"]
 
+    # b = T .* (g * α)
+    
     # Push parameters to container
     push!(container, ρ, α, β, cᵖ, f⁰, g, L, κₑ)
 

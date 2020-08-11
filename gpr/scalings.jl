@@ -5,16 +5,16 @@ struct Tscaling <: Scaling
 end
 
 #forward: forward mapping from T to T'∈[0,1] (pre-processing).
-forward(x, scaling::Tscaling) = (x .- 20.0) ./ scaling.ΔT
+scale(x, scaling::Tscaling) = (x .- 20.0) ./ scaling.ΔT
 #backward: backward mapping from T' to T (post-processing).
-backward(x, scaling::Tscaling) = x .* scaling.ΔT .+ 20.0
+unscale(x, scaling::Tscaling) = x .* scaling.ΔT .+ 20.0
 
 struct wTscaling <: Scaling
     nc::Float64 #normalization constant
 end
 
-forward(x, scaling::wTscaling) = x ./ scaling.nc
-backward(x, scaling::wTscaling) = x .* scaling.nc
+scale(x, scaling::wTscaling) = x ./ scaling.nc
+unscale(x, scaling::wTscaling) = x .* scaling.nc
 
 
 function get_scaling(V_name, vavg)
