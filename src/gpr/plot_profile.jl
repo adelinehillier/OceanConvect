@@ -36,7 +36,7 @@ function animate_profile(𝒢, 𝒟, v_str)
         exact = 𝒟.v[:,i]
         day_string = string(floor(Int, 𝒟.t[i]/86400))
         scatter(predi[i], 𝒟.zavg, label = "GP")
-        plot!(exact, 𝒟.z, legend = :topleft, label = "LES", xlabel = "$(V_name[V_str])", ylabel = "Depth [m]", title = "day " * day_string, xlims=xlims)
+        plot!(exact, 𝒟.z, legend = :topleft, label = "LES", xlabel = "$(V_name[v_str])", ylabel = "Depth [m]", title = "day " * day_string, xlims=xlims)
     end
 
     return anim

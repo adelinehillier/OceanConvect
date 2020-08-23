@@ -1,5 +1,5 @@
 """
-Constructors for covariance functions.
+Constructors for covariance (kernel) functions.
 
       Constructor                   Description                                Isotropic/Anisotropic
     - SquaredExponentialI(γ,σ):     squared exponential covariance function    isotropic
@@ -11,10 +11,9 @@ Constructors for covariance functions.
 
 Distance metrics
 
-    - l²-norm:  d(x,x') = || x - x' ||",
-    - H¹-norm:  d(x,x') = || diff(x)./diff(z) - diff(x')./diff(z) ||",
-    - H⁻¹-norm: d(x,x') = || diff(x).*diff(z) - diff(x').*diff(z) ||"
-
+    - euclidean_distance            l²-norm:  d(x,x') = || x - x' ||",
+    - derivative_distance           H¹-norm:  d(x,x') = || diff(x)./diff(z) - diff(x')./diff(z) ||",
+    - antiderivative_distance       H⁻¹-norm: d(x,x') = || diff(x).*diff(z) - diff(x').*diff(z) ||"
 """
 abstract type Kernel end
 
@@ -29,29 +28,16 @@ struct SquaredExponentialI{T<:Float64} <: Kernel
     γ::T
     "Signal variance"
     σ::T
+    "Distance metric"
+    d::Function
 end
 
 # evaluates the kernel function for a given pair of inputs
-function kernel_function(k::SquaredExponentialI; d=l2_norm, z=nothing)
+function kernel_function(k::SquaredExponentialI; z=nothing)
     # k(x,x') = σ * exp( - d(x,x')² / 2γ² )
-  evaluate(a,b) = k.σ * exp(- d(a,b,z)^2 / 2*(k.γ)^2 )
+  evaluate(a,b) = k.σ * exp(- k.d(a,b,z)^2 / 2*(k.γ)^2 )
   return evaluate
 end
-
-# struct FakeKernelI{T<:Float64} <: Kernel
-#     # Hyperparameters
-#     "Length scale"
-#     γ::T
-#     "Signal variance"
-#     σ::T
-#     # equation = "k(a,b) = σ * exp( - ||a-b||^2 / 2*γ )"
-#     # evaluate(a,b; γ,σ) = σ * exp(- sq_mag(a,b) / 2*γ )
-# end
-
-# function kernel_function(k::FakeKernelI; d=l2_norm, z=nothing)
-#   evaluate(a,b,z) = 1.0
-#   return evaluate
-# end
 
 struct RationalQuadraticI{T<:Float64} <: Kernel
     # Hyperparameters
@@ -61,9 +47,11 @@ struct RationalQuadraticI{T<:Float64} <: Kernel
     σ::T
     "Shape parameter"
     α::T
+    "Distance metric"
+    d::Function
 end
 
-function kernel_function(k::RationalQuadraticI; d=l2_norm, z=nothing)
+function kernel_function(k::RationalQuadraticI; z=nothing)
     # k(x,x') = σ * (1+(x-x')'*(x-x')/(2*α*(γ²))^(-α)
     function evaluate(a,b)
         l = (k.γ)^2 # squared length scale
@@ -78,11 +66,13 @@ struct Matern12I{T<:Float64} <: Kernel
     γ::T
     "Signal variance"
     σ::T
+    "Distance metric"
+    d::Function
 end
 
-function kernel_function(k::Matern12I; d=l2_norm, z=nothing)
+function kernel_function(k::Matern12I; z=nothing)
     # k(x,x') = σ * exp( - ||x-x'|| / γ )
-  evaluate(a,b) = k.σ * exp(- d(a,b,z) / k.γ )
+  evaluate(a,b) = k.σ * exp(- k.d(a,b,z) / k.γ )
   return evaluate
 end
 
@@ -92,12 +82,14 @@ struct Matern32I{T<:Float64} <: Kernel
     γ::T
     "Signal variance"
     σ::T
+    "Distance metric"
+    d::Function
 end
 
-function kernel_function(k::Matern32I; d=l2_norm, z=nothing)
+function kernel_function(k::Matern32I; z=nothing)
     # k(x,x') = σ * (1+c) * exp(-√(3)*||x-x'||)/γ)
     function evaluate(a,b)
-        c = sqrt(3)*d(a,b,z)/k.γ
+        c = sqrt(3)*k.d(a,b,z)/k.γ
         return k.σ * (1+c) * exp(-c)
     end
   return evaluate
@@ -109,13 +101,15 @@ struct Matern52I{T<:Float64} <: Kernel
     γ::T
     "Signal variance"
     σ::T
+    "Distance metric"
+    d::Function
 end
 
-function kernel_function(k::Matern52I; d=l2_norm, z=nothing)
+function kernel_function(k::Matern52I; z=nothing)
     # k(x,x') = σ * ( 1 + √(5)*||x-x'||)/γ + 5*||x-x'||²/(3*γ^2) ) * exp(-√(5)*||x-x'||)/γ)
     function evaluate(a,b)
-        g = sqrt(5)*d(a,b,z)/k.γ
-        h = 5*(d(a,b,z)^2)/(3*k.γ^2)
+        g = sqrt(5)*k.d(a,b,z)/k.γ
+        h = 5*(k.d(a,b,z)^2)/(3*k.γ^2)
         return k.σ * (1+g+h) * exp(-g)
     end
   return evaluate
@@ -216,5 +210,20 @@ end
 #         d = 5*sq_mag(a,b)/(3*k.γ^2)
 #         return k.σ * (1+c+d) * exp(-c)
 #     end
+#   return evaluate
+# end
+
+# struct FakeKernelI{T<:Float64} <: Kernel
+#     # Hyperparameters
+#     "Length scale"
+#     γ::T
+#     "Signal variance"
+#     σ::T
+#     # equation = "k(a,b) = σ * exp( - ||a-b||^2 / 2*γ )"
+#     # evaluate(a,b; γ,σ) = σ * exp(- sq_mag(a,b) / 2*γ )
+# end
+
+# function kernel_function(k::FakeKernelI; z=nothing)
+#   evaluate(a,b,z) = 1.0
 #   return evaluate
 # end

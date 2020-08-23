@@ -26,8 +26,8 @@ This example uses the ResidualData struct and GP.
         approx - truth
 """
 
-using Statistics, LinearAlgebra, Plots
-include("GP1.jl")
+# using Statistics, LinearAlgebra, Plots
+# include("GP.jl")
 
 """
 ProfileData

@@ -1,19 +1,47 @@
 """
-ProfileData struct for storing simulation data and functions for creating instances.
+Data module for preparing data for analysis with
+
+    - GaussianProcess (src/gpr/GaussianProcess.jl)
+        or
+    - NeuralNetwork (src/gpr/NeuralNetwork.jl)
+
 """
 
-using LinearAlgebra
-using BenchmarkTools
+module ModelData
 
-include("scalings.jl")
-include("pre_post_processing.jl")
-include("../les/get_les_data.jl")
+# using JLD2,
+#       NetCDF,
+#       BenchmarkTools
+
 include("../les/custom_avg.jl")
+
+# harvesting Oceananigans data
+include("../les/get_les_data.jl")
+export get_les_data
+
+# normalization
+include("scalings.jl")
+export  Tscaling,
+        wTscaling
+export  scale, # normalize
+        unscale # un-normalize
+
+# pre- and post-processing on the normalized data
+include("problems.jl")
+export  SequentialProblem,
+        ResidualProblem
+export  get_problem,
+        get_predictors_targets,
+        postprocess_prediction
+
+# ProfileData struct
+export  ProfileData,
+        data
 
 """
 ProfileData
 ------ Description
-- data structure for preparing profile data from Oceananigans simulations for analysis with gpr, nn, or ed.
+- data structure for preparing profile data for analysis with gpr or nn.
 ------ Data Structure and Description
     v::Array,           Nz x Nt array of T or wT values directly from the simulation, not preprocessed.
     vavg::Array,        Nt-length array of Nz-length vectors, scaled and pre-processed
@@ -30,6 +58,8 @@ ProfileData
     κₑ::Float,          eddy diffusivity
     scaling::Scaling,   scaling struct for normalizing the data along the T or wT axis
     processor::DataProcessor, struct for preparing the data for GP regression
+    problem::Problem,   what mapping you wish to evaluate with the model. (Sequential("T"), Sequential("wT"), Residual("T"), Residual("KPP"), or Residual("TKE"))
+
 """
 struct ProfileData
     v       ::Array
@@ -46,40 +76,44 @@ struct ProfileData
     n_train ::Int64
     κₑ      ::Float64
     scaling ::Scaling
-    processor::DataProcessor
+    problem ::Problem
 end
 
 """
-construct_profile_data(filename, V_name, D; N=4)
+data(filename, problem; D=16, N=4)
 
 ------ Description
 Returns a ProfileData object based on data from `filename`
 
 ------ Arguments
 - 'filename': (string)  Name of the NetCDF or JLD2 file containing the data from the Oceananigans simulation.
-- 'V_name': (string)    "T" for the temperature profile or "wT" for the temperature flux
-- 'D' (integer)         Number of gridpoints in the z direction to average the data to for training and prediction.
+- 'problem': (Problem). What mapping you wish to evaluate with the model. (Sequential("T"), Sequential("wT"), Residual("T"), Residual("KPP"), or Residual("TKE"))
 
 ------ Keyword Arguments
+- 'D' (integer)         Number of gridpoints in the z direction to average the data to for training and prediction.
 - 'N': (integer)        Interval between the timesteps to be reserved for training data (default 4).
                         If N=4, the profile data for every 4 timesteps will be reserved for training (~25% training data);
                         the rest will be used in the verification set.
 """
-function construct_profile_data(filename::String, V_name::String, D; N=4)
+function data(filename::String, problem::Problem; D=16, N=4)
 
     # collect data from Oceananigans simulation output file
     data = get_les_data(filename)
 
-    # get variable (T or wT) array
-    if V_name=="T";      V=data.T
-    elseif V_name=="wT"; V=data.wT
-    else
-        throw(error())
-    end
-
     # timeseries [s]
     t = data.t
     Nt = length(t)
+
+    # problem
+    problem = get_problem(problem, data, timeseries)
+    # get variable (T or wT) array
+    if problem.variable=="T"
+        V=data.T # D x Nt array
+    elseif problem.variable=="wT"
+        V=data.wT # D x Nt array
+    else
+        throw(error())
+    end
 
     # eddy diffusivity
     κₑ = data.κₑ
@@ -96,12 +130,12 @@ function construct_profile_data(filename::String, V_name::String, D; N=4)
     # preprocessing
 
     # 1) normalize the data so that it ranges from 0 to 1
-    scaling = get_scaling(V_name, vavg)
+    scaling = get_scaling(problem.variable, vavg)
     vavg = [scale(vec, scaling) for vec in vavg]
 
     # 2) get the "preprocessed" data for GPR
-    processor = get_processor(data, t, V_name)
-    x,y = get_predictors_predictions(vavg, processor)
+    problem = get_problem(problem, data, t)
+    x,y = get_predictors_targets(vavg, problem)
     # x is (v₀, v₁, ... ,v_(Nt-1)) (Nt-1)-length array of D-length inputs
     # y is the predictions for each elt in x
 
@@ -112,11 +146,11 @@ function construct_profile_data(filename::String, V_name::String, D; N=4)
     z = data.z
     zavg = custom_avg(z, D)
 
-    return ProfileData(V, vavg, x, y, x_train, y_train, verification_set, z, zavg, t, Nt, n_train, κₑ, scaling, processor)
+    return ProfileData(V, vavg, x, y, x_train, y_train, verification_set, z, zavg, t, Nt, n_train, κₑ, scaling, problem)
 end
 
 """
-construct_profile_data(filename, D; N=4)
+data(filename, D; N=4)
 
 ------ Description
 Returns an instance of ProfileData containing training data from multiple simulations.
@@ -126,25 +160,25 @@ Returns an instance of ProfileData containing training data from multiple simula
 
 ------ Arguments
 - 'filenames': (string)  Vector of filenames (.nc or .jld2) to collect data from.
-- 'V_name': (string)     "T" for the temperature profile or "wT" for the temperature flux
-- 'D' (integer)          Number of gridpoints in the z direction to average the data to for training and prediction.
+- 'problem': (Problem). What mapping you wish to evaluate with the model. (Sequential("T"), Sequential("wT"), Residual("T"), Residual("KPP"), or Residual("TKE"))
 
 ------ Keyword Arguments
-- 'N': (integer)         Interval between the timesteps to be reserved for training data (default 4).
-                         If N=4, the profile data for every 4 timesteps will be reserved for training (~25% training data);
-                         the rest will be used in the verification set.
+- 'D' (integer)         Number of gridpoints in the z direction to average the data to for training and prediction.
+- 'N': (integer)        Interval between the timesteps to be reserved for training data (default 4).
+                        If N=4, the profile data for every 4 timesteps will be reserved for training (~25% training data);
+                        the rest will be used in the verification set.
 """
-function construct_profile_data(filenames::Array, V_name, D; N=4)
+function data(filenames::Array, problem::Problem; D=16, N=4)
 
     # combines data from multiple files
-    𝒟 = construct_profile_data(filenames[1], V_name, D; N=N)
+    𝒟 = data(filenames[1], problem; D=D, N=N)
 
     v = 𝒟.v
     x_train = 𝒟.x_train
     y_train = 𝒟.y_train
 
     for filename in filenames[2:end]
-        data_b = construct_profile_data(filename, V_name, D; N=N)
+        data_b = data(filename, problem; D=D, N=N)
 
         training_set = 1:N:(data_b.Nt-1)
 
@@ -154,5 +188,7 @@ function construct_profile_data(filenames::Array, V_name, D; N=4)
     end
 
     # ONLY v, x_train and y_train contain data from all filenames, the rest of the attributes are from the first filename in filenames
-    return ProfileData(v, 𝒟.vavg, 𝒟.x, 𝒟.y, x_train, y_train, 𝒟.verification_set, 𝒟.z, 𝒟.zavg, 𝒟.t, 𝒟.Nt, 𝒟.n_train, 𝒟.κₑ, 𝒟.scaling, 𝒟.processor)
+    return ProfileData(v, 𝒟.vavg, 𝒟.x, 𝒟.y, x_train, y_train, 𝒟.verification_set, 𝒟.z, 𝒟.zavg, 𝒟.t, 𝒟.Nt, 𝒟.n_train, 𝒟.κₑ, 𝒟.scaling, 𝒟.problem)
 end
+
+end # module

@@ -6,19 +6,24 @@ added log marginal likelihood function.
 """
 
 using LinearAlgebra
-using BenchmarkTools
+# using BenchmarkTools
+
+# include("../data/ModelData.jl")
+using OceanConvect.ModelData
 
 include("kernels.jl") # covariance functions
-include("scalings.jl") # normalizing the data
-include("pre_post_processing.jl") # data pre- and post-processing
-include("../les/custom_avg.jl")
+# include("scalings.jl") # normalizing the data
+
+# using OceanConvect.ModelData
+
+# include("../les/custom_avg.jl")
 
 """
 GP
 # Description
 - data structure for typical GPR computations
 # Data Structure and Description
-    kernel::ℱ, a function
+    kernel::ℱ, a Kernel object
     data::𝒮 , an array of vectors (n-length array of D-length vectors)
     α::𝒮2 , an array
     K::𝒰 , matrix or sparse matrix
@@ -27,8 +32,8 @@ GP
     d:Function, distance function to use in the kernel
     z::Vector, values w.r.t. which to derivate the state when evaluating the distance function
 """
-struct GP{ℱ, 𝒮, 𝒮2, 𝒰, 𝒱}
-    kernel::ℱ
+struct GP{Kernel, 𝒮, 𝒮2, 𝒰, 𝒱}
+    kernel::Kernel
     data::𝒮
     α::𝒮2
     K::𝒰
@@ -38,7 +43,7 @@ end
 """
 construct_gpr(x_train, y_train; kernel; sparsity_threshold = 0.0, robust = true, entry_threshold = sqrt(eps(1.0)))
 # Description
-Constructs the posterior distribution for a GP. In other words this does the 'training' automagically.
+Constructs the posterior distribution for a gp. In other words this does the 'training' automagically.
 # Arguments
 - 'x_train': (array). training inputs (predictors), must be an array of states.
                       length-n array of D-length vectors, where D is the length of each input n is the number of training points.
@@ -47,7 +52,6 @@ Constructs the posterior distribution for a GP. In other words this does the 'tr
 - 'kernel': (Kernel). Kernel object. See kernels.jl.
                       kernel_function(kernel)(x,x') maps predictor x predictor to real numbers.
 # Keyword Arguments
-- 'distance_fn': (function). distance function to use in the kernel (default Euclidean distance)
 - 'z': (vector). values w.r.t. which to derivate the state (default none).
 - 'normalize': (bool). whether to normalize the data during preprocessing and reverse the scaling for postprocessing. Can lead to better performance.
 - 'hyperparameters': (array). default = []. hyperparameters that enter into the kernel
@@ -55,14 +59,14 @@ Constructs the posterior distribution for a GP. In other words this does the 'tr
 - 'robust': (bool). default = true. This decides whether to uniformly scale the diagonal entries of the Kernel Matrix. This sometimes helps with Cholesky factorizations.
 - 'entry_threshold': (number). default = sqrt(eps(1.0)). This decides whether an entry is "significant" or not. For typical machines this number will be about 10^(-8) * largest entry of kernel matrix.
 # Return
-- 'GP Object': (GP).
+- GP object
 """
-function construct_gpr(x_train, y_train, kernel::Kernel; distance_fn=l2_norm, z=nothing, sparsity_threshold = 0.0, robust = true, entry_threshold = sqrt(eps(1.0)))
+function model(x_train, y_train, kernel::Kernel, zavg; sparsity_threshold = 0.0, robust = true, entry_threshold = sqrt(eps(1.0)))
 
     # all data preprocessing occurs elsewhere.
 
     # get k(x,x') function from kernel object
-    kernel = kernel_function(kernel; d=distance_fn, z=z)
+    kernel = kernel_function(kernel; z=zavg)
     # fill kernel matrix with values
     K = compute_kernel_matrix(kernel, x_train)
 
@@ -94,9 +98,9 @@ function construct_gpr(x_train, y_train, kernel::Kernel; distance_fn=l2_norm, z=
     return GP(kernel, x_train, α, K, Array(CK))
 end
 
-function get_gp(data::ProfileData, kernel::Kernel, d)
-    # create instance of GP using data
-    𝒢 = construct_gpr(data.x_train, data.y_train, kernel; distance_fn=d, z=data.zavg);
+function model(data::ProfileData; kernel::Kernel = Kernel())
+    # create instance of GP using data from ProfileData object
+    𝒢 = model(data.x_train, data.y_train, kernel, z=data.zavg);
     return 𝒢
 end
 
@@ -106,14 +110,13 @@ prediction(x, 𝒢::GP)
 - Given scaled state x, GP 𝒢, returns a scaled prediction
 # Arguments
 - 'x': scaled state
-- '𝒢': GP with which to make the prediction
+- '𝒢': GP object with which to make the prediction
 # Return
 - 'y': scaled prediction
 """
 function prediction(x, 𝒢::GP)
     return 𝒢.α' * 𝒢.kernel.([x], 𝒢.data)
 end
-
 
 """
 uncertainty(x, 𝒢::GP)
@@ -193,7 +196,10 @@ end
 
 """
 ----- Description
-Predict temperature profile from start to finish without the training data.
+Predict profile across all time steps for the true check.
+    - if the problem is sequential, predict profiles from start to finish without the training data, using only the initial profile
+    - if the problem is residual, predict profiles at each timestep using model-predicted difference between truth and physics-based model (KPP or TKE) prediction
+
 Returns an n-length array of D-length vectors, where n is the number of training points and D is the
 ----- Arguments
 - '𝒢' (GP). The GP object
@@ -202,13 +208,31 @@ Returns an n-length array of D-length vectors, where n is the number of training
 - 'unscaled' (bool). If true, unscale the data for plotting (false for calculating loss).
 """
 function get_gpr_pred(𝒢::GP, 𝒟::ProfileData; unscaled=true)
-    gpr_prediction = similar(𝒟.vavg[1:𝒟.Nt-1])
-    starting = 𝒟.x[1] # x is scaled
-    gpr_prediction[1] = starting
-    for i in 1:(𝒟.Nt-2)
-        x = gpr_prediction[i]
-        scaled_pred = prediction(x, 𝒢)
-        gpr_prediction[i+1] = postprocess_prediction(x, scaled_pred, 𝒟.processor)
+
+    if 𝒟.problem <: SequentialProblem
+
+        # Predict temperature profile from start to finish without the training data.
+        gpr_prediction = similar(𝒟.vavg[1:𝒟.Nt-1])
+        starting = 𝒟.x[1] # x is scaled
+        gpr_prediction[1] = starting
+        for i in 1:(𝒟.Nt-2)
+            x = gpr_prediction[i]
+            scaled_model_output = prediction(x, 𝒢)
+            gpr_prediction[i+1] = postprocess_prediction(x, scaled_model_output, 𝒟.problem)
+        end
+
+    elseif 𝒟.problem <: ResidualProblem
+
+        # Predict temperature profile at each timestep using model-predicted difference between truth and physics-based model (KPP or TKE) prediction
+        gpr_prediction = similar(𝒟.vavg[1:𝒟.Nt-1])
+        for i in 1:(𝒟.Nt-1)
+            x = gpr_prediction[i]
+            scaled_model_output = prediction(x, 𝒢)
+            gpr_prediction[i] = postprocess_prediction(x, scaled_model_output, 𝒟.problem)
+        end
+
+    else; throw(error)
+
     end
 
     if unscaled
