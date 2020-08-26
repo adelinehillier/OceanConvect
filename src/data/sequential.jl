@@ -5,22 +5,6 @@ Data pre- / post-processing. Takes a ProfileData object and prepares it for use 
 
 include("problems.jl")
 
-struct Sequential_dT <: SequentialProblem
-    variable::String #"T" or "wT"
-    Δt::Number # assumes constant time interval between all timesteps
-    # scaling::Scaling
-end
-
-struct Sequential_T <: SequentialProblem
-    variable::String # "T" or "wT"
-    # scaling::Scaling
-end
-
-struct Sequential_wT <: SequentialProblem
-    variable::String # "T" or "wT"
-    # scaling::Scaling
-end
-
 # *--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*
 # | Sequential_dT                              |
 # |                                            |
@@ -43,13 +27,13 @@ get_predictors_targets(vavg::Array, problem::Sequential_T)
           T[i] --model--> (T[i+1]-T[i])/Δt ≈ ∂t(T)
 
 ----- Arguments
-- 'vavg': (Array)             Nt-length array of D-length vectors. Data from which to extract x and y, the predictors and corresponding predictions.
-- 'problem': (Residual_T)     Sequential_T object associated with the data (output of get_problem)
+- 'vavg': (Array)                Nt-length array of D-length vectors. Data from which to extract x and y, the predictors and corresponding predictions.
+- 'problem': (Sequential_dT)     Sequential_T object associated with the data (output of get_problem)
 """
-function get_predictors_targets(vavg::Array, problem::Residual_T)
+function get_predictors_targets(vavg::Array, problem::Sequential_dT)
     # vavg should be scaled!
     predictors = vavg[1:end-1] # T[i] for i = 1, ..., Nt-1
-    predictions = (vavg[2:end] - predictors) / problem.Δt # (T[i+1]-T[i])/Δt
+    targets = (vavg[2:end] - predictors) / problem.Δt # (T[i+1]-T[i])/Δt
     return (predictors, targets)
 end
 
@@ -65,7 +49,7 @@ Returns the scaled prediction (predicted temperature profile), T[i+1], computed 
 'scaled_model_output': (Array)         model(T[i]), the scaled prediction for a temperature profile (G(T[i]) or NN(T[i]))
 'problem': (Problem)
 """
-function postprocess_prediction(scaled_predictor, scaled_model_output, problem::Residual_T)
+function postprocess_prediction(scaled_predictor, scaled_model_output, problem::Sequential_dT)
     return scaled_model_output * problem.Δt + scaled_predictor
 end
 

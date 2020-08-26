@@ -5,67 +5,79 @@ Data pre- / post-processing. Takes a ProfileData object and prepares it for use 
 
 abstract type Problem end
 
-struct SequentialProblem <: Problem # for mappings from variable[i] --> variable[i+1]
-    s::String # "T" or "dT" or "wT"
+abstract type SequentialProblem <: Problem end
+abstract type ResidualProblem <: Problem end
+
+struct Sequential <: SequentialProblem # for mappings that predict the subsequent timestep from the current timestep
+    type::String # "T" or "dT" or "wT"
 end
 
-struct ResidualProblem <: Problem
+struct Residual <: ResidualProblem # for mappings that predict the true current timestep from a physics-based model's current timestep
     type::String # "KPP" or "TKE"
 end
 
-"""
-get_problem(problem::Problem, data::OceananigansData, timeseries)
------ Description
-    Creates an instance of a Problem struct depending on whether the variable is T or wT.
------ Arguments
-- 'data': (OceananigansData)       struct containing data from simulation.
-- 'timeseries': (Array)            simulation timeseries [s]
-- 'problem': (SequentialProblem).  what mapping you wish to evaluate with the model. (Sequential("T"), Sequential("wT"))
-"""
-function get_problem(problem::SequentialProblem, data::OceananigansData, timeseries)
-
-    α = 2e-4
-    g = 9.80665
-    # b_initial = 𝒟.T[:,1] .* α*g
-    # approximate initial buoyancy gradient N², where b = N²z + 20*α*g
-    #                                                 T = N²z/(αg) + 20
-    T_initial = data.T[:,1]
-    N² = (T_initial[1] - 20)*α*g / data.z[1]
-
-    if problem.type == "dT"
-        Δt = (timeseries[2]-timeseries[1]) / N²
-        return Residual_T("T", Δt) # Residual_T(variable, Δt)
-
-    elseif problem.type == "T"
-        return Sequential_T("T")
-
-    elseif problem.type == "wT"
-        return Sequential_wT("wT")
-
-    else
-        throw(error())
-    end
+struct Sequential_dT <: SequentialProblem
+    variable::String #"T" or "wT"
+    Δt::Number # assumes constant time interval between all timesteps
+    # scaling::Scaling
 end
 
+struct Sequential_T <: SequentialProblem
+    variable::String # "T" or "wT"
+    # scaling::Scaling
+end
+
+struct Sequential_wT <: SequentialProblem
+    variable::String # "T" or "wT"
+    # scaling::Scaling
+end
+
+struct Residual_KPP <: ResidualProblem
+    variable::String
+end
+
+struct Residual_TKE <: ResidualProblem
+    variable::String
+end
 
 """
 get_problem(problem::Problem, data::OceananigansData, timeseries)
 ----- Description
-    Creates an instance of a Problem struct depending on whether the variable is T or wT.
+    Creates an instance of a Problem struct depending on the type of mapping.
 ----- Arguments
-- 'problem': (ResidualProblem).    what mapping you wish to evaluate with the model. (Residual("T"), Residual("KPP"), or Residual("TKE"))
-- 'data': (OceananigansData)       struct containing data from simulation.
+- 'problem': (SequentialProblem).  what mapping you wish to evaluate with the model. (Sequential("T"), Sequential("wT"))
+- 'N²': (Number)                   initial buoyancy stratification
 - 'timeseries': (Array)            simulation timeseries [s]
 """
-function get_problem(problem::ResidualProblem, data::OceananigansData, timeseries)
+function get_problem(problem::Problem, N², timeseries)
 
-    if problem.type == "KPP"
-        return Residual_KPP("T")
+    if typeof(problem) <: SequentialProblem
 
-    elseif problem.type == "TKE"
-        return Residual_TKE("T")
+        if problem.type == "dT"
+            Δt = (timeseries[2]-timeseries[1]) / N²
+            return Sequential_dT("T", Δt) # Residual_T(variable, Δt)
 
-    else
-        throw(error())
+        elseif problem.type == "T"
+            return Sequential_T("T")
+
+        elseif problem.type == "wT"
+            return Sequential_wT("wT")
+
+        else; throw(error())
+        end
+
+    elseif typeof(problem) <: ResidualProblem
+
+        if problem.type == "KPP"
+            return Residual_KPP("T")
+
+        elseif problem.type == "TKE"
+            return Residual_TKE("T")
+
+        else; throw(error())
+        end
+
+    else; throw(error())
     end
+
 end

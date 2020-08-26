@@ -8,8 +8,10 @@ added log marginal likelihood function.
 using LinearAlgebra
 # using BenchmarkTools
 
-# include("../data/ModelData.jl")
-using OceanConvect.ModelData
+# import .ModelData: ProfileData
+
+include("../data/ModelData.jl")
+include("../data/problems.jl")
 
 include("kernels.jl") # covariance functions
 # include("scalings.jl") # normalizing the data
@@ -100,7 +102,7 @@ end
 
 function model(data::ProfileData; kernel::Kernel = Kernel())
     # create instance of GP using data from ProfileData object
-    𝒢 = model(data.x_train, data.y_train, kernel, z=data.zavg);
+    𝒢 = model(data.x_train, data.y_train, kernel, data.zavg);
     return 𝒢
 end
 
@@ -207,9 +209,13 @@ Returns an n-length array of D-length vectors, where n is the number of training
 ----- Keyword Arguments
 - 'unscaled' (bool). If true, unscale the data for plotting (false for calculating loss).
 """
+
 function get_gpr_pred(𝒢::GP, 𝒟::ProfileData; unscaled=true)
 
-    if 𝒟.problem <: SequentialProblem
+    println("$(typeof(𝒟.problem))")
+    println("$(SequentialProblem)")
+
+    if typeof(𝒟.problem) <: SequentialProblem
 
         # Predict temperature profile from start to finish without the training data.
         gpr_prediction = similar(𝒟.vavg[1:𝒟.Nt-1])
@@ -221,7 +227,7 @@ function get_gpr_pred(𝒢::GP, 𝒟::ProfileData; unscaled=true)
             gpr_prediction[i+1] = postprocess_prediction(x, scaled_model_output, 𝒟.problem)
         end
 
-    elseif 𝒟.problem <: ResidualProblem
+    elseif typeof(𝒟.problem) <: ResidualProblem
 
         # Predict temperature profile at each timestep using model-predicted difference between truth and physics-based model (KPP or TKE) prediction
         gpr_prediction = similar(𝒟.vavg[1:𝒟.Nt-1])

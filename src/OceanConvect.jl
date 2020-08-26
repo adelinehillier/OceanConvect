@@ -7,8 +7,8 @@ module OceanConvect
 export
         # ModelData / profile_data
         data,
-        SequentialProblem,
-        ResidualProblem,
+        Sequential,
+        Residual,
 
         # GaussianProcess / GP
         # construct_gpr,
@@ -47,7 +47,10 @@ using Plots,
       NetCDF,
       Statistics,
       LinearAlgebra,
-      BenchmarkTools
+      BenchmarkTools,
+
+# OceanTurb for KPP
+using OceanTurb
 
 # submodules
 include("data/ModelData.jl")

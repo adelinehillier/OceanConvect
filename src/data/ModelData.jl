@@ -28,23 +28,37 @@ export  scale, # normalize
 
 # pre- and post-processing on the normalized data
 include("problems.jl")
-export  SequentialProblem,
-        ResidualProblem
-export  get_problem,
-        get_predictors_targets,
+export  Problem,
+        Sequential,
+        Residual,
+        SequentialProblem,
+        ResidualProblem,
+        get_problem
+
+include("residual.jl")
+include("sequential.jl")
+export  get_predictors_targets,
         postprocess_prediction
 
 # ProfileData struct
 export  ProfileData,
         data
 
+function approx_initial_buoyancy_stratification(temp_array,z)
+    α = 2e-4
+    g = 9.80665
+    T_initial = temp_array[:,1] # b_initial = 𝒟.T[:,1] .* α*g
+    N² = (T_initial[1] - 20)*α*g / z[1] # approximate initial buoyancy gradient N², where b = N²z + 20*α*g and T = N²z/(αg) + 20
+    return N²
+end
+
 """
 ProfileData
 ------ Description
 - data structure for preparing profile data for analysis with gpr or nn.
 ------ Data Structure and Description
-    v::Array,           Nz x Nt array of T or wT values directly from the simulation, not preprocessed.
-    vavg::Array,        Nt-length array of Nz-length vectors, scaled and pre-processed
+    v::Array,           Nz x Nt array of T or wT values directly from the LES simulation, not preprocessed.
+    vavg::Array,        Nt-length array of Nz-length vectors from LES simulation, scaled and pre-processed
     x::Array,           all simulation inputs, scaled and pre-processed
     y::Array,           all simulation inputs, scaled and pre-processed
     x_train::Array,     training inputs (predictors; array of states). (length-n array of D-length vectors, where D is the length of each input n is the number of training points)
@@ -98,19 +112,27 @@ Returns a ProfileData object based on data from `filename`
 function data(filename::String, problem::Problem; D=16, N=4)
 
     # collect data from Oceananigans simulation output file
-    data = get_les_data(filename)
+    data = get_les_data(filename) # <: OceananigansData
 
     # timeseries [s]
     t = data.t
     Nt = length(t)
 
+    # depth values
+    z = data.z
+    zavg = custom_avg(z, D)
+
+    # approximate buoyancy stratification at the initial timestep
+    N² = approx_initial_buoyancy_stratification(data.T,z)
+
     # problem
-    problem = get_problem(problem, data, timeseries)
+    problem = get_problem(problem, N², t)
+
     # get variable (T or wT) array
     if problem.variable=="T"
-        V=data.T # D x Nt array
+        v = data.T # D x Nt array
     elseif problem.variable=="wT"
-        V=data.wT # D x Nt array
+        v = data.wT # D x Nt array
     else
         throw(error())
     end
@@ -125,7 +147,7 @@ function data(filename::String, problem::Problem; D=16, N=4)
     n_train = length(training_set)
 
     # compress variable array to D gridpoints
-    vavg = [custom_avg(V[:,j], D) for j in 1:Nt]
+    vavg = [custom_avg(v[:,j], D) for j in 1:Nt]
 
     # preprocessing
 
@@ -134,7 +156,6 @@ function data(filename::String, problem::Problem; D=16, N=4)
     vavg = [scale(vec, scaling) for vec in vavg]
 
     # 2) get the "preprocessed" data for GPR
-    problem = get_problem(problem, data, t)
     x,y = get_predictors_targets(vavg, problem)
     # x is (v₀, v₁, ... ,v_(Nt-1)) (Nt-1)-length array of D-length inputs
     # y is the predictions for each elt in x
@@ -142,11 +163,7 @@ function data(filename::String, problem::Problem; D=16, N=4)
     x_train = x[training_set]
     y_train = y[training_set]
 
-    # depth values
-    z = data.z
-    zavg = custom_avg(z, D)
-
-    return ProfileData(V, vavg, x, y, x_train, y_train, verification_set, z, zavg, t, Nt, n_train, κₑ, scaling, problem)
+    return ProfileData(v, vavg, x, y, x_train, y_train, verification_set, z, zavg, t, Nt, n_train, κₑ, scaling, problem)
 end
 
 """

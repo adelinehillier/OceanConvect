@@ -1,7 +1,8 @@
-cd("../..")
-push!(LOAD_PATH, "./src")
+# cd("../..")
+# push!(LOAD_PATH, "./src")
 
-##
+# cd /Users/adelinehillier/.julia/dev/OceanConvect
+
 using OceanConvect
 
 # Construct a ProfileData object, 𝒟, consisting of the data to train on,
@@ -9,7 +10,7 @@ using OceanConvect
 
 # data
 filename = "general_strat_4_profiles.jld2"
-problem  = SequentialProblem("dT") # v: "T" for temperature profile; "wT" for temperature flux profile
+problem  = Sequential("dT") # v: "T" for temperature profile; "wT" for temperature flux profile
 D        = 16       # collapse profile data down to 16 gridpoints
 N        = 4        # collect every 4 timesteps' data for training
 
@@ -24,10 +25,10 @@ kernel   = get_kernel(k, logγ, logσ, distance)
 𝒟 = data(filename, problem; D=D, N=N)
 
 # model
-𝒢 = GP.model(𝒟; kernel = kernel)
+𝒢 = OceanConvect.GaussianProcess.model(𝒟; kernel = kernel)
 
 # Find the log(length-scale parameter) value in the range -3:0.1:3 that minimizes the mean error on the true check
-min_log_param, min_error = get_min_gamma(k, 𝒟, d, -3:0.1:3)
+min_log_param, min_error = get_min_gamma(k, 𝒟, distance, -3:0.1:3)
 
 # Animate the mean GP prediction.
 anim = animate_profile(𝒢, 𝒟, v)
