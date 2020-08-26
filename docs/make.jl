@@ -1,63 +1,30 @@
-using Documenter, OceanConvect
-
-makedocs(sitename="OceanConvect")
-
-example_pages = [
-    "One-dimensional diffusion"        => "generated/one_dimensional_diffusion.md",
-    "Two-dimensional turbulence"       => "generated/two_dimensional_turbulence.md",
-    "Ocean wind mixing and convection" => "generated/ocean_wind_mixing_and_convection.md",
-    "Ocean convection with plankton"   => "generated/ocean_convection_with_plankton.md",
-    "Internal wave"                    => "generated/internal_wave.md",
-    "Langmuir turbulence"              => "generated/langmuir_turbulence.md"
-]
-
-format = Documenter.HTML(
-        prettyurls = get(ENV, "CI", nothing) == "true"
-
-makedocs(
-    ...,
-    pages = [
-        "page.md",
-        "Page title" => "page2.md",
-        "Subsection" => [
-            ...
-        ]
-    ]
-)
-
-deploydocs(
-    repo = "github.com/USER_NAME/PACKAGE_NAME.jl.git",
-)
-
-
-
-
 using Documenter
 using OceanConvect
 
+format = Documenter.HTML(
+        prettyurls = get(ENV, "CI", nothing) == "true",
+        collapselevel = 1
+)
 
-dg_methods = Any[
-    "Home" => "dg_methods.md",
-    "Single Element" => "dg_single_element.md",
-    "Boundary Conditions" => "boundary_conditions.md",
-    "Variational Crimes" => "inexact_quadrature.md"
+example_pages = [
+    "Basic Gaussian Process" => "demos/gpr/demo.md"
 ]
 
-physics = Any[
-    "Home" => "physics.md",
-    "Convective Adjustment" => "convective_adjustment.md",
+pages = Any[
+"Home" => "index.md",
+"Examples" => example_pages,
+"Function Index" => "function_index.md",
 ]
 
 makedocs(
-    sitename = "DG_Playground",
-    format = Documenter.HTML(collapselevel = 1),
-    pages = [
-    "Home" => "index.md",
-    "Examples" => examples,
-    "GPR" => gpr,
-    "Function Index" => "function_index.md",
-    ],
-    modules = [DG_Playground]
+    sitename = "OceanConvect.jl",
+    format   = format,
+    pages    = pages,
+    modules  = [OceanConvect],
+    clean    = true,
+    doctest  = false
 )
 
-deploydocs(repo = "https://github.com/adelinehillier/OceanConvect.git")
+deploydocs(
+    repo = "https://github.com/adelinehillier/OceanConvect.git"
+)
