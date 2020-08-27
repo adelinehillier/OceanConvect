@@ -4,21 +4,16 @@ https://github.com/sandreza/Learning/blob/master/sandbox/gaussian_process.jl
 Changed handling of kernel functions; changed some variable names;
 added log marginal likelihood function.
 """
-
+# previous
 using LinearAlgebra
-# using BenchmarkTools
-
-# import .ModelData: ProfileData
-
-include("../data/ModelData.jl")
-include("../data/problems.jl")
-
+# include("../data/problems.jl")
 include("kernels.jl") # covariance functions
-# include("scalings.jl") # normalizing the data
+# ---
 
+# using .ModelData
+# include("../data/ModelData.jl")
 # using OceanConvect.ModelData
-
-# include("../les/custom_avg.jl")
+# import OceanConvect.ModelData
 
 """
 GP
@@ -152,7 +147,6 @@ compute_kernel_matrix(kernel, x)
 """
 function compute_kernel_matrix(k, x)
 
-    # println(length(x[1]))
     K = [k(x[i], x[j]) for i in eachindex(x), j in eachindex(x)]
 
     if typeof(K[1,1]) <: Number
@@ -178,7 +172,6 @@ function mean_log_marginal_loss(y_train, 𝒢::GP; add_constant=false)
     D = length(𝒢.data[1])
 
     ys = hcat(y_train...)' # n x D
-    # println("$(size(ys[1,:]))")
 
     if add_constant
         c = sum([log(𝒢.CK[i,i]) for i in 1:n]) + 0.5*n*log(2*pi)
@@ -211,9 +204,6 @@ Returns an n-length array of D-length vectors, where n is the number of training
 """
 
 function get_gpr_pred(𝒢::GP, 𝒟::ProfileData; unscaled=true)
-
-    println("$(typeof(𝒟.problem))")
-    println("$(SequentialProblem)")
 
     if typeof(𝒟.problem) <: SequentialProblem
 

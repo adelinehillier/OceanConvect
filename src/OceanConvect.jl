@@ -47,7 +47,7 @@ using Plots,
       NetCDF,
       Statistics,
       LinearAlgebra,
-      BenchmarkTools,
+      BenchmarkTools
 
 # OceanTurb for KPP
 using OceanTurb

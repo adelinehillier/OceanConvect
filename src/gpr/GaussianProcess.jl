@@ -4,7 +4,7 @@ Uses ProfileData struct to store data and GP struct for performing GPR on the da
 """
 module GaussianProcess
 
-# using OceanConvect.ModelData
+using OceanConvect.ModelData
 
 # using Plots
 

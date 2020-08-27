@@ -22,11 +22,12 @@ function plot_profile(𝒢::GP, 𝒟::ProfileData, V_name, time_index, gpr_predi
     return p
 end
 
-function animate_profile(𝒢, 𝒟, v_str)
+function animate_profile(𝒢, 𝒟)
 
     V_name = Dict("T" =>"Temperature [°C]", "wT"=>"Temperature flux [°C⋅m/s]")
     x_lims = Dict("T" =>(18,20), "wT"=>(-1e-5,4e-5))
 
+    v_str = 𝒟.problem.variable # "T" or "wT"
     xlims = x_lims[v_str]
 
     predi = get_gpr_pred(𝒢, 𝒟)
