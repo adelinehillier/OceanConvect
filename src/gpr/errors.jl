@@ -5,11 +5,11 @@ function get_me_true_check(𝒢::GP, 𝒟::ProfileData)
     # mean error on true check for a single value of γ
     # computed on the scaled down (range [0,1] for temperature) profile values
     total_error = 0.0
-    gpr_prediction = get_gpr_pred(𝒢, 𝒟; unscaled=false)
-    n = 𝒟.Nt-2
-    for i in 1:n
-        exact    = 𝒟.y[i+1]
-        predi    = gpr_prediction[i+1]
+    gpr_prediction = get_gpr_pred(𝒢, 𝒟; unscaled=true)
+    n = 𝒟.Nt-1
+    for i in 2:n
+        exact    = 𝒟.vavg[i+1]
+        predi    = gpr_prediction[i]
         total_error += euclidean_distance(exact, predi) # euclidean distance
     end
     return total_error / n

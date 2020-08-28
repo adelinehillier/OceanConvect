@@ -1,3 +1,6 @@
+long_name = Dict("T" =>"Temperature [°C]", "wT"=>"Temperature flux [°C⋅m/s]")
+x_lims = Dict("T" =>(18,20), "wT"=>(-1e-5,4e-5))
+
 """
 plot_profile(gp::GP, data::ProfileData, V_name, time_index, gpr_prediction)
 ----- Description
@@ -11,21 +14,20 @@ create an animation.
 - 'time_index' (Int). The time index
 - 'gpr_prediction' (Array). Output of get_gpr_pred (which should only be computed once) on 𝒢 and 𝒟.
 """
-function plot_profile(𝒢::GP, 𝒟::ProfileData, V_name, time_index, gpr_prediction)
-    exact = data.v[:,time_index+1]
-    day_string = string(floor(Int, data.t[time_index]/86400))
+function plot_profile(𝒢::GP, 𝒟::ProfileData, time_index, gpr_prediction)
 
-    if V_name == "Temperature [°C]"; xlims=(19,20) end
-    if V_name == "Temperature flux [°C⋅m/s]"; xlims=(-1e-5,4e-5) end
-    p = scatter(gpr_prediction[time_index+1], data.zavg, label = "GP", xlims=xlims)
-    plot!(exact, data.z, legend = :topleft, label = "LES", xlabel = V_name, ylabel = "depth", title = "day " * day_string)
+    exact = 𝒟.v[:,time_index+1]
+    day_string = string(floor(Int, 𝒟.t[time_index]/86400))
+
+    v_str = 𝒟.problem.variable # "T" or "wT"
+    xlims = x_lims[v_str]
+
+    p = scatter(gpr_prediction[time_index+1], 𝒟.zavg, label = "GP", xlims=xlims)
+    plot!(exact, 𝒟.z, legend = :topleft, label = "LES", xlabel = "$(long_name[v_str])", ylabel = "Depth [m]", title = "day " * day_string, xlims=xlims)
     return p
 end
 
 function animate_profile(𝒢, 𝒟)
-
-    V_name = Dict("T" =>"Temperature [°C]", "wT"=>"Temperature flux [°C⋅m/s]")
-    x_lims = Dict("T" =>(18,20), "wT"=>(-1e-5,4e-5))
 
     v_str = 𝒟.problem.variable # "T" or "wT"
     xlims = x_lims[v_str]
@@ -37,7 +39,7 @@ function animate_profile(𝒢, 𝒟)
         exact = 𝒟.v[:,i]
         day_string = string(floor(Int, 𝒟.t[i]/86400))
         scatter(predi[i], 𝒟.zavg, label = "GP")
-        plot!(exact, 𝒟.z, legend = :topleft, label = "LES", xlabel = "$(V_name[v_str])", ylabel = "Depth [m]", title = "day " * day_string, xlims=xlims)
+        plot!(exact, 𝒟.z, legend = :topleft, label = "LES", xlabel = "$(long_name[v_str])", ylabel = "Depth [m]", title = "day " * day_string, xlims=xlims)
     end
 
     return anim

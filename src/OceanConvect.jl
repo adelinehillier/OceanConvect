@@ -5,28 +5,33 @@ Uses ProfileData struct to store data and GP struct for performing GPR on the da
 module OceanConvect
 
 export
-        # ModelData / profile_data
+        # ModelData / profile_data.jl
         data,
+        ProfileData,
         Sequential,
         Residual,
 
-        # GaussianProcess / GP
+        # GaussianProcess / gp.jl
         # construct_gpr,
         uncertainty,
+
         # model,
         get_gpr_pred,
 
-        # GaussianProcess / kernels
+        # GaussianProcess / kernels.jl
+        Kernel,
         get_kernel,
+        kernel_function,
 
-        # GaussianProcess / distances
+        # GaussianProcess / distances.jl
         euclidean_distance,
         derivative_distance,
         antiderivative_distance,
 
-        # GaussianProcess / hyperparameters
+        # GaussianProcess / hyperparameter_landscapes.jl
         plot_landscapes_compare_error_metrics,
         plot_landscapes_compare_files_me,
+        plot_error_histogram,
         get_min_gamma,
         get_min_gamma_alpha,
 

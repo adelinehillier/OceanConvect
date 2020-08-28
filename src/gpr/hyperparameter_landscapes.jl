@@ -84,13 +84,15 @@ end
 function plot_error_histogram(𝒢::GP, 𝒟::ProfileData, time_index)
     # mean error for true check
     gpr_prediction = get_gpr_pred(𝒢, 𝒟)
-    gpr_error = zeros(𝒟.Nt-2)
-    for i in 1:𝒟.Nt-2
+    n = 𝒟.Nt-1
+
+    gpr_error = zeros(n-1)
+    for i in 1:n-1
         exact    = 𝒟.y[i+1]
         predi    = gpr_prediction[i+1]
         gpr_error[i] = euclidean_distance(exact, predi) # euclidean distance
     end
-    mean_error = sum(gpr_error)/(𝒟.Nt-2)
+    mean_error = sum(gpr_error)/n
 
     error_plot_log = histogram(log.(gpr_error), title = "log(error) at each timestep of the full evolution", xlabel="log(Error)", ylabel="Frequency",ylims=(0,250), label="frequency")
     vline!([log(mean_error)], line = (4, :dash, 0.8), label="mean error")
@@ -108,14 +110,7 @@ function get_min_gamma(k::Int64, 𝒟::ProfileData, distance, log_γs)
         𝒢 = model(𝒟; kernel=kernel);
 
         # -----compute mean error for true check----
-        total_error = 0.0
-        gpr_prediction = get_gpr_pred(𝒢, 𝒟)
-        for q in 1:𝒟.Nt-2
-            exact        = 𝒟.y[q+1]
-            predi        = gpr_prediction[q+1]
-            total_error += euclidean_distance(exact, predi) # euclidean distance
-        end
-        mets[i] = total_error/(𝒟.Nt-2)
+        mets[i] = get_me_true_check(𝒢, 𝒟)
     end
 
     i = argmin(mets)

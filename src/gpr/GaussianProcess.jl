@@ -22,7 +22,8 @@ export  model,
         get_gpr_pred
 
 include("kernels.jl")
-export  SquaredExponentialI,
+export  Kernel,
+        SquaredExponentialI,
         RationalQuadraticI,
         Matern12I,
         Matern32I,
@@ -43,6 +44,7 @@ export  get_me_true_check, # evolving forward from an arbitrary initial timestep
 include("hyperparameter_landscapes.jl")
 export  plot_landscapes_compare_error_metrics,
         plot_landscapes_compare_files_me,
+        plot_error_histogram,
         get_min_gamma,
         get_min_gamma_alpha
 
